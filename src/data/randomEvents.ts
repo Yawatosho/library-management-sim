@@ -1,0 +1,81 @@
+import type { RandomEvent } from "../game/types";
+
+export const randomEvents: RandomEvent[] = [
+  {
+    id: "viral_post",
+    title: "SNS投稿が話題に",
+    description: "ちょっとした投稿が学生の間で広まりました。",
+    tone: "good",
+    effects: { publicity: 5, reputation: 3 },
+  },
+  {
+    id: "faculty_praise",
+    title: "教員が授業で図書館を紹介",
+    description: "授業内で図書館サービスが好意的に紹介されました。",
+    tone: "good",
+    effects: { facultyTrust: 4, studentSatisfaction: 3 },
+  },
+  {
+    id: "student_volunteers",
+    title: "学生ボランティア参加",
+    description: "学生が展示や案内づくりを手伝ってくれました。",
+    tone: "good",
+    effects: { publicity: 3, staffFatigue: -3 },
+  },
+  {
+    id: "local_news",
+    title: "展示が地域ニュースに掲載",
+    description: "地域メディアが図書館展示を取り上げました。",
+    tone: "good",
+    effects: { reputation: 6, publicity: 3 },
+  },
+  {
+    id: "donation",
+    title: "良い寄贈資料が届く",
+    description: "研究にも授業にも使える寄贈資料が入りました。",
+    tone: "good",
+    effects: { collection: 5, reputation: 2 },
+  },
+  {
+    id: "price_hike",
+    title: "電子ジャーナル価格高騰",
+    description: "想定外の値上げで年度予算に打撃です。",
+    tone: "bad",
+    effects: { budget: -8 },
+  },
+  {
+    id: "ac_trouble",
+    title: "空調トラブル",
+    description: "館内の一部で空調不調が続きました。",
+    tone: "bad",
+    effects: { facility: -6, studentSatisfaction: -4 },
+  },
+  {
+    id: "system_down",
+    title: "システム障害",
+    description: "検索と貸出まわりで一時的な混乱がありました。",
+    tone: "bad",
+    effects: { dx: -4, reputation: -3, staffFatigue: 4 },
+  },
+  {
+    id: "complaint",
+    title: "騒音苦情",
+    description: "館内の利用マナーについて苦情が届きました。",
+    tone: "bad",
+    effects: { studentSatisfaction: -3, reputation: -2 },
+  },
+  {
+    id: "staff_absence",
+    title: "職員の急な欠員",
+    description: "シフト調整で残った職員に負担がかかりました。",
+    tone: "bad",
+    effects: { staffFatigue: 8 },
+  },
+  {
+    id: "wet_books",
+    title: "本の水濡れトラブル",
+    description: "返却資料の水濡れ対応に追われました。",
+    tone: "bad",
+    effects: { collection: -3, reputation: -2 },
+  },
+];
