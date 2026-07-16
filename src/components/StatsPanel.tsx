@@ -1,4 +1,4 @@
-import { metricKeys, statLabels } from "../game/calculations";
+import { getStatMeterPercent, metricKeys, statLabels } from "../game/calculations";
 import type { StatKey, Stats } from "../game/types";
 
 interface StatsPanelProps {
@@ -98,7 +98,7 @@ export const StatsPanel = ({ stats, title = "パラメータ", excludeKeys = [],
                 </span>
               </div>
               <div className="stat-bar" aria-hidden="true">
-                <span style={{ width: `${Math.max(0, Math.min(100, stats[key]))}%` }} />
+                <span style={{ width: `${getStatMeterPercent(key, stats[key])}%` }} />
               </div>
             </div>
           );

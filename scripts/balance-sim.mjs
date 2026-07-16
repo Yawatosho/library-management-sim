@@ -10,7 +10,7 @@ const { commands } = await server.ssrLoadModule("/src/data/commands.ts");
 const { policies } = await server.ssrLoadModule("/src/data/policies.ts");
 const { initialStats, createInitialState } = await server.ssrLoadModule("/src/game/initialState.ts");
 const { calculateScore } = await server.ssrLoadModule("/src/game/calculations.ts");
-const { resolveTurn } = await server.ssrLoadModule("/src/game/eventResolver.ts");
+const { resolveRandomEventChoice, resolveTurn } = await server.ssrLoadModule("/src/game/eventResolver.ts");
 
 const commandSets = [];
 const collectCommandSets = (start, remainingAp, selected) => {
@@ -39,12 +39,23 @@ const playTurn = (candidate, action, rng = () => 1) => {
     selectedPolicyId: action.policyId,
     selectedCommandIds: action.commandIds,
   };
-  const resolved = resolveTurn(state, rng);
+  let resolved = resolveTurn(state, rng);
+  const eventChoices = resolved.result.randomEvent?.event.choices;
+  if (eventChoices?.length) {
+    const choiceIndex = Math.min(eventChoices.length - 1, Math.floor(rng() * eventChoices.length));
+    const choice = eventChoices[choiceIndex];
+    resolved = resolveRandomEventChoice({
+      ...state,
+      stats: resolved.stats,
+      lastResult: resolved.result,
+    }, choice.id) ?? resolved;
+  }
   if (resolved.gameOver) return null;
+  const nextStats = resolved.pendingYearEnd?.statsAfter ?? resolved.stats;
   return {
     turn: candidate.turn + 1,
-    stats: resolved.stats,
-    yearStartStats: resolved.pendingYearEnd ? resolved.stats : candidate.yearStartStats,
+    stats: nextStats,
+    yearStartStats: resolved.pendingYearEnd ? nextStats : candidate.yearStartStats,
     path: [...candidate.path, action],
   };
 };
@@ -111,16 +122,51 @@ const randomRuns = Array.from({ length: 1000 }, (_, index) => randomRun(index + 
 const randomScores = randomRuns.map((run) => calculateScore(run.stats));
 const medianRun = randomRuns[Math.floor(randomRuns.length / 2)];
 const best = process.argv.includes("--random-only") ? null : beamSearch();
+const rankCounts = randomScores.reduce(
+  (counts, score) => {
+    const rank = score >= 90 ? "S" : score >= 82 ? "A" : score >= 76 ? "B" : score >= 70 ? "C" : score >= 64 ? "D" : "E";
+    counts[rank] += 1;
+    return counts;
+  },
+  { S: 0, A: 0, B: 0, C: 0, D: 0, E: 0 },
+);
+const meanScore = randomScores.reduce((total, score) => total + score, 0) / randomScores.length;
+const scoreBands = randomScores.reduce(
+  (bands, score) => {
+    const label =
+      score < 50 ? "under50" :
+        score < 55 ? "50-54" :
+          score < 60 ? "55-59" :
+            score < 65 ? "60-64" :
+              score < 70 ? "65-69" :
+                score < 75 ? "70-74" :
+                  score < 80 ? "75-79" :
+                    score < 85 ? "80-84" :
+                      score < 90 ? "85-89" : "90plus";
+    bands[label] += 1;
+    return bands;
+  },
+  { under50: 0, "50-54": 0, "55-59": 0, "60-64": 0, "65-69": 0, "70-74": 0, "75-79": 0, "80-84": 0, "85-89": 0, "90plus": 0 },
+);
 
 console.log({
   actionCount: actions.length,
   initialScore: calculateScore(initialStats),
+  randomAttempts: 1000,
   randomSurvivors: randomScores.length,
+  randomGameOvers: 1000 - randomScores.length,
   randomScores: {
+    min: randomScores[0],
     p10: percentile(randomScores, 0.1),
+    p25: percentile(randomScores, 0.25),
     p50: percentile(randomScores, 0.5),
+    mean: Math.round(meanScore * 10) / 10,
+    p75: percentile(randomScores, 0.75),
     p90: percentile(randomScores, 0.9),
+    max: randomScores.at(-1),
   },
+  rankCounts,
+  scoreBands,
   medianStats: medianRun?.stats,
   best: best
     ? {

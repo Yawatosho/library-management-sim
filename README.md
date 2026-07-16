@@ -39,6 +39,18 @@ base: "/library-management-sim/",
 
 GitHub Pagesでは、GitHub Actionsで`npm ci`、`npm run build`を実行し、生成された`dist/`を公開します。手動で公開する場合も、`dist/`配下をPagesの公開対象にしてください。
 
+## デバッグモード
+
+通常のタイトル画面ではデバッグモードの入口は表示されません。確認時だけURLへ`?debug=1`を付けてアクセスしてください。
+
+```text
+https://<ユーザー名>.github.io/library-management-sim/?debug=1
+```
+
+## Google Analytics
+
+公開環境ではGoogle Analytics 4（測定ID: `G-J6NS8CCNWN`）を読み込み、各ゲーム画面の表示を仮想ページビューとして計測します。`localhost`と`127.0.0.1`では計測されません。
+
 ## 画像アセット
 
 司書さん画像はなくても動きます。後から追加する場合は、以下のファイル名で`public/assets/images/`に置いてください。

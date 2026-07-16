@@ -1,6 +1,7 @@
 import { commandById } from "../data/commands";
 import { randomEvents } from "../data/randomEvents";
 import { seasonalEventByMonth } from "../data/seasonalEvents";
+import { evaluateAnnualObjective } from "./annualObjectives";
 import {
   applyEffects,
   calculateAppliedCommand,
@@ -28,6 +29,8 @@ export interface ResolvedTurn {
   ending: ReturnType<typeof calculateEnding> | null;
   gameOver: GameOverResult | null;
 }
+
+export const RANDOM_EVENT_RATE = 0.4;
 
 const commandHasTag = (command: Command, tag: Command["tags"][number]) =>
   command.tags.includes(tag);
@@ -58,7 +61,7 @@ const resolveMonthlySeasonalEffects = (
 };
 
 const pickRandomEvent = (rng: () => number): RandomEventResult | null => {
-  if (rng() >= 0.3) {
+  if (rng() >= RANDOM_EVENT_RATE) {
     return null;
   }
 
@@ -102,6 +105,43 @@ const createSummary = (
   }
 
   return summary;
+};
+
+const addSeasonalSummary = (result: TurnResult) => {
+  const seasonalEvent = seasonalEventByMonth[result.month];
+  if (seasonalEvent) {
+    result.summary.unshift(`${seasonalEvent.title}: ${seasonalEvent.effectNote}`);
+  }
+};
+
+const finalizeMonthlyStats = (
+  state: GameState,
+  year: number,
+  month: number,
+  monthlyStats: Stats,
+): Omit<ResolvedTurn, "result"> => {
+  let finalStats = monthlyStats;
+  let pendingYearEnd: YearEndResult | null = null;
+  let ending: ReturnType<typeof calculateEnding> | null = null;
+  let gameOver = checkGameOver(monthlyStats);
+
+  if (!gameOver && state.turn === 36) {
+    const annualObjective = evaluateAnnualObjective(year, monthlyStats);
+    finalStats = annualObjective.completed
+      ? applyEffects(monthlyStats, annualObjective.objective.reward.effects)
+      : monthlyStats;
+    ending = calculateEnding(finalStats, annualObjective);
+  } else if (!gameOver && month === 3) {
+    pendingYearEnd = calculateYearEnd(year, monthlyStats, state.yearStartStats ?? state.stats);
+    gameOver = checkGameOver(pendingYearEnd.statsAfter);
+  }
+
+  return {
+    stats: finalStats,
+    pendingYearEnd,
+    ending,
+    gameOver,
+  };
 };
 
 export const resolveTurn = (state: GameState, rng = Math.random): ResolvedTurn => {
@@ -154,29 +194,64 @@ export const resolveTurn = (state: GameState, rng = Math.random): ResolvedTurn =
     summary: createSummary(statsBefore, monthlyStats, randomEvent, seasonalEffects),
   };
 
-  let finalStats = monthlyStats;
-  let pendingYearEnd: YearEndResult | null = null;
-  let ending: ReturnType<typeof calculateEnding> | null = null;
-  let gameOver = checkGameOver(monthlyStats);
+  addSeasonalSummary(result);
 
-  if (!gameOver && state.turn === 36) {
-    ending = calculateEnding(monthlyStats);
-  } else if (!gameOver && month === 3) {
-    pendingYearEnd = calculateYearEnd(year, monthlyStats, state.yearStartStats ?? state.stats);
-    finalStats = pendingYearEnd.statsAfter;
-    gameOver = checkGameOver(finalStats);
-  }
-
-  const seasonalEvent = seasonalEventByMonth[month];
-  if (seasonalEvent) {
-    result.summary.unshift(`${seasonalEvent.title}: ${seasonalEvent.effectNote}`);
-  }
+  const hasPendingChoice = Boolean(randomEvent?.event.choices?.length);
+  const finalized = hasPendingChoice
+    ? {
+        stats: monthlyStats,
+        pendingYearEnd: null,
+        ending: null,
+        gameOver: null,
+      }
+    : finalizeMonthlyStats(state, year, month, monthlyStats);
 
   return {
     result,
-    stats: finalStats,
-    pendingYearEnd,
-    ending,
-    gameOver,
+    ...finalized,
+  };
+};
+
+export const resolveRandomEventChoice = (
+  state: GameState,
+  choiceId: string,
+): ResolvedTurn | null => {
+  const previousResult = state.lastResult;
+  const randomEvent = previousResult?.randomEvent;
+  const choices = randomEvent?.event.choices;
+
+  if (!previousResult || !randomEvent || !choices || randomEvent.choiceId) {
+    return null;
+  }
+
+  const choice = choices.find((candidate) => candidate.id === choiceId);
+  if (!choice) {
+    return null;
+  }
+
+  const monthlyStats = applyEffects(previousResult.statsAfter, choice.effects);
+  const resolvedRandomEvent: RandomEventResult = {
+    ...randomEvent,
+    effects: choice.effects,
+    choiceId: choice.id,
+    choiceLabel: choice.label,
+    choiceResultMessage: choice.resultMessage,
+  };
+  const result: TurnResult = {
+    ...previousResult,
+    randomEvent: resolvedRandomEvent,
+    statsAfter: monthlyStats,
+    summary: createSummary(
+      previousResult.statsBefore,
+      monthlyStats,
+      resolvedRandomEvent,
+      previousResult.seasonalEffects,
+    ),
+  };
+  addSeasonalSummary(result);
+
+  return {
+    result,
+    ...finalizeMonthlyStats(state, previousResult.year, previousResult.month, monthlyStats),
   };
 };

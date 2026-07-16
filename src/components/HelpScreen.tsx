@@ -13,39 +13,46 @@ const helpChapters = [
     text: "1ターンは1か月、全36ターン。毎月3APを使い、重点方針とコマンドを組み合わせます。",
   },
   {
-    id: "score",
+    id: "objective",
     number: "02",
+    icon: "assignment_turned_in",
+    title: "年度重点課題",
+    text: "年度ごとに3つの達成条件があります。メイン画面の重点課題ボードで進捗を確認でき、全条件達成で年度末ボーナスを獲得します。",
+  },
+  {
+    id: "score",
+    number: "03",
     icon: "military_tech",
     title: "最終評価",
-    text: "3年目3月の終了時に100点満点で評価。90点以上で最高評価のSランクです。",
+    text: "3年目3月の終了時に、職員士気・職員疲労を除く育成成果を評価。各項目は120を満点水準として100点換算され、伸び残した3項目も重視されます。ランクはS:90以上、A:82以上、B:76以上、C:70以上、D:64以上、E:63以下です。",
   },
   {
     id: "game-over",
-    number: "03",
+    number: "04",
     icon: "warning",
     title: "運営停止条件",
     text: "予算-20以下、疲労100、評判・学生満足度・教員信頼のいずれかが0でゲームオーバーです。",
   },
   {
     id: "year-end",
-    number: "04",
+    number: "05",
     icon: "account_balance",
     title: "年度末評価",
     text: "毎年3月に次年度予算を決定。執行部信頼、評判、学生満足度、教員信頼が予算を左右します。",
   },
   {
     id: "morale",
-    number: "05",
+    number: "06",
     icon: "volunteer_activism",
     title: "職員士気",
     text: "士気70以上で成果が伸び、疲労負担も軽減。44以下では成果が落ち、疲労が増えます。",
   },
   {
     id: "growth",
-    number: "06",
+    number: "07",
     icon: "monitoring",
-    title: "高水準の育成",
-    text: "70以上の項目は高くなるほど成長が緩やか。大型施策と方針・季節補正の活用が鍵です。",
+    title: "100を超える育成",
+    text: "育成パラメータに上限はありません。高水準でもコマンド効果は変わらないため、得意分野を気持ちよく伸ばし続けられます。",
   },
 ] as const;
 
@@ -134,7 +141,7 @@ export const HelpScreen = ({ onBack }: HelpScreenProps) => {
           <img src={librarianUrl} alt="運営を案内する司書さん" />
           <div className="help-librarian__message">
             <span>司書さん</span>
-            <p>全部を一度に覚えなくても大丈夫です。まずは今月の課題を見て、3APの使い方を考えてみましょう。</p>
+            <p>全部を一度に覚えなくても大丈夫です。まずは今月の様子を見ながら、3APの使い方を私と一緒に考えてみましょう。</p>
           </div>
         </aside>
       </main>

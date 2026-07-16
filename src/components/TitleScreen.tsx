@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
+import { MemoryAlbum } from "./MemoryAlbum";
 import { BgmPreferenceButton } from "./SeasonalBgm";
 import { DebugSetupModal, type DebugGameConfig } from "./DebugSetupModal";
 
@@ -21,8 +22,14 @@ export const TitleScreen = ({
   onStartDebug,
 }: TitleScreenProps) => {
   const [debugOpen, setDebugOpen] = useState(false);
+  const [albumOpen, setAlbumOpen] = useState(false);
+  const debugEnabled = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1";
   const keyVisualUrl = `${import.meta.env.BASE_URL}assets/images/title-key-visual.png`;
   const style = { "--title-key-visual": `url(${keyVisualUrl})` } as CSSProperties;
+
+  if (albumOpen) {
+    return <MemoryAlbum onBack={() => setAlbumOpen(false)} />;
+  }
 
   return (
     <div className="screen title-screen title-key-screen" style={style}>
@@ -63,11 +70,16 @@ export const TitleScreen = ({
               <span><strong>遊び方</strong><small>ルールと評価を確認</small></span>
               <span className="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
             </button>
+            <button type="button" onClick={() => setAlbumOpen(true)}>
+              <span className="material-symbols-rounded" aria-hidden="true">collections_bookmark</span>
+              <span><strong>思い出アルバム</strong><small>出会った出来事と未来を振り返る</small></span>
+              <span className="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+            </button>
           </nav>
 
           <div className="title-key-submenu">
             {canContinue && <button type="button" onClick={onDeleteSave}>セーブデータ削除</button>}
-            <button type="button" onClick={() => setDebugOpen(true)}>デバッグモード</button>
+            {debugEnabled && <button type="button" onClick={() => setDebugOpen(true)}>デバッグモード</button>}
           </div>
         </section>
       </main>
@@ -76,7 +88,7 @@ export const TitleScreen = ({
         <span>UNIVERSITY LIBRARY OPERATIONS OFFICE</span>
         <small>静かな一手が、大学の未来を変える。</small>
       </footer>
-      {debugOpen && <DebugSetupModal onClose={() => setDebugOpen(false)} onStart={onStartDebug} />}
+      {debugEnabled && debugOpen && <DebugSetupModal onClose={() => setDebugOpen(false)} onStart={onStartDebug} />}
     </div>
   );
 };

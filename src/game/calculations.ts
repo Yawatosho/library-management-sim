@@ -1,7 +1,9 @@
 import { commandById } from "../data/commands";
 import { getEndingByScore } from "../data/endings";
 import { policyById } from "../data/policies";
+import { evaluateAnnualObjective } from "./annualObjectives";
 import type {
+  AnnualObjectiveResult,
   AppliedCommandResult,
   Command,
   CommandId,
@@ -45,7 +47,7 @@ export const statLabels: Record<StatKey, string> = {
 
 export const isMetricKey = (key: StatKey): key is MetricKey => key !== "budget";
 
-export const clampMetric = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
+export const clampMetric = (value: number) => Math.max(0, Math.round(value));
 
 export const clampStats = (stats: Stats): Stats => {
   const next = { ...stats };
@@ -161,13 +163,6 @@ const applyMoraleModifiers = (
     effects,
     notes: [`${modifiers.label}: 成果${direction}${outcomePercent}%、疲労負担${fatigueDirection}${fatiguePercent}%`],
   };
-};
-
-const getGrowthMultiplier = (currentValue: number) => {
-  if (currentValue >= 95) return 0.2;
-  if (currentValue >= 85) return 0.4;
-  if (currentValue >= 70) return 0.7;
-  return 1;
 };
 
 const applyPolicyModifiers = (
@@ -339,7 +334,7 @@ export const calculateAppliedCommand = (
   policyId: PolicyId,
   month: number,
   staffMorale = 50,
-  currentStats?: Stats,
+  _currentStats?: Stats,
 ): AppliedCommandResult => {
   const command = commandById[commandId];
   const baseEffects: Partial<Record<StatKey, number>> = { ...command.effects };
@@ -348,17 +343,9 @@ export const calculateAppliedCommand = (
   const moraleResult = applyMoraleModifiers(seasonalResult.effects, staffMorale);
 
   const roundedEffects: Partial<Record<StatKey, number>> = {};
-  let growthWasLimited = false;
   for (const [rawKey, rawValue] of Object.entries(moraleResult.effects)) {
     const key = rawKey as StatKey;
-    const roundedValue = roundDelta(rawValue ?? 0);
-    if (currentStats && key !== "budget" && key !== "staffFatigue" && roundedValue > 0) {
-      const multiplier = getGrowthMultiplier(currentStats[key]);
-      roundedEffects[key] = Math.round(roundedValue * multiplier);
-      growthWasLimited ||= multiplier < 1;
-    } else {
-      roundedEffects[key] = roundedValue;
-    }
+    roundedEffects[key] = roundDelta(rawValue ?? 0);
   }
 
   const roundedBudgetCost =
@@ -376,31 +363,60 @@ export const calculateAppliedCommand = (
       ...policyResult.notes,
       ...seasonalResult.notes,
       ...moraleResult.notes,
-      ...(growthWasLimited ? ["高水準の項目は成果が緩やかになります"] : []),
     ],
   };
 };
 
+const finalScoreKeys = [
+  "collection",
+  "studentSatisfaction",
+  "facultyTrust",
+  "executiveTrust",
+  "publicity",
+  "facility",
+  "researchSupport",
+  "dx",
+  "reputation",
+] as const satisfies readonly MetricKey[];
+
+export const finalEvaluationTarget = 120;
+
+export const getStatMeterPercent = (key: StatKey, value: number) => {
+  const target = key === "budget" || key === "staffFatigue" ? 100 : finalEvaluationTarget;
+  return Math.max(0, Math.min(100, value / target * 100));
+};
+
+const toEvaluationValue = (value: number) =>
+  Math.min(100, Math.max(0, value) / finalEvaluationTarget * 100);
+
 export const calculateScore = (stats: Stats) => {
   const weightedScore =
-    stats.collection * 0.1 +
-    stats.studentSatisfaction * 0.15 +
-    stats.facultyTrust * 0.15 +
-    stats.executiveTrust * 0.1 +
-    stats.publicity * 0.08 +
-    stats.staffMorale * 0.1 +
-    (100 - stats.staffFatigue) * 0.1 +
-    stats.facility * 0.08 +
-    stats.researchSupport * 0.1 +
-    stats.dx * 0.07 +
-    stats.reputation * 0.12;
+    toEvaluationValue(stats.collection) * 0.1 +
+    toEvaluationValue(stats.studentSatisfaction) * 0.15 +
+    toEvaluationValue(stats.facultyTrust) * 0.15 +
+    toEvaluationValue(stats.executiveTrust) * 0.1 +
+    toEvaluationValue(stats.publicity) * 0.08 +
+    toEvaluationValue(stats.facility) * 0.08 +
+    toEvaluationValue(stats.researchSupport) * 0.1 +
+    toEvaluationValue(stats.dx) * 0.07 +
+    toEvaluationValue(stats.reputation) * 0.12;
 
-  // The original weights total 1.15, so normalize the result to a true 100-point scale.
-  const score = weightedScore / 1.15;
+  const outcomeScore = weightedScore / 0.95;
+  const lowerThreeAverage = finalScoreKeys
+    .map((key) => toEvaluationValue(stats[key]))
+    .sort((a, b) => a - b)
+    .slice(0, 3)
+    .reduce((total, value) => total + value, 0) / 3;
+
+  // A strong final evaluation requires both overall results and attention to weak areas.
+  const score = outcomeScore * 0.7 + lowerThreeAverage * 0.3;
   return Math.round(score * 10) / 10;
 };
 
-export const calculateEnding = (stats: Stats) => getEndingByScore(calculateScore(stats));
+export const calculateEnding = (stats: Stats, annualObjective?: AnnualObjectiveResult) => ({
+  ...getEndingByScore(calculateScore(stats)),
+  annualObjective,
+});
 
 const addStatChange = (
   changes: Partial<Record<StatKey, number>>,
@@ -411,12 +427,14 @@ const addStatChange = (
 };
 
 export const calculateYearEnd = (year: number, stats: Stats, statsBefore: Stats = stats): YearEndResult => {
+  const annualObjective = evaluateAnnualObjective(year, stats);
+  const budgetReference = (value: number) => Math.min(finalEvaluationTarget, value);
   const baseBudget =
     100 +
-    Math.floor((stats.executiveTrust - 50) / 5) +
-    Math.floor((stats.reputation - 50) / 5) +
-    Math.floor((stats.studentSatisfaction - 50) / 10) +
-    Math.floor((stats.facultyTrust - 50) / 10);
+    Math.floor((budgetReference(stats.executiveTrust) - 50) / 5) +
+    Math.floor((budgetReference(stats.reputation) - 50) / 5) +
+    Math.floor((budgetReference(stats.studentSatisfaction) - 50) / 10) +
+    Math.floor((budgetReference(stats.facultyTrust) - 50) / 10);
 
   let nextBudget = baseBudget;
   const budgetBonuses: string[] = [];
@@ -430,6 +448,19 @@ export const calculateYearEnd = (year: number, stats: Stats, statsBefore: Stats 
   if (stats.executiveTrust >= 70) {
     nextBudget += 8;
     budgetBonuses.push("執行部信頼70以上: 次年度予算+8");
+  }
+
+  if (annualObjective.completed) {
+    const { budgetBonus, effects } = annualObjective.objective.reward;
+    if (budgetBonus > 0) {
+      nextBudget += budgetBonus;
+      budgetBonuses.push(`重点課題達成: 次年度予算+${budgetBonus}`);
+    }
+    for (const [rawKey, value] of Object.entries(effects)) {
+      if (value !== undefined && value !== 0) {
+        addStatChange(statChanges, rawKey as StatKey, value);
+      }
+    }
   }
 
   if (stats.staffFatigue >= 80) {
@@ -456,10 +487,10 @@ export const calculateYearEnd = (year: number, stats: Stats, statsBefore: Stats 
   const statsAfter = clampStats({ ...adjustedStats, budget: nextBudget });
   const comment =
     nextBudget >= 110
-      ? "次年度はかなり動きやすい予算です。攻めの年にできます。"
+      ? "次年度は選べることがたくさんありそうです。どんな図書館にしていくか、一緒に考えるのが楽しみですね。"
       : nextBudget >= 95
-        ? "次年度予算はおおむね安定しています。焦らず積み上げましょう。"
-        : "次年度予算は厳しめです。優先順位を絞る運営が必要です。";
+        ? "次年度予算はおおむね安定しています。私たちのペースで、ひとつずつ育てていきましょう。"
+        : "次年度予算は少し控えめです。大切にしたいことから、私と一緒に選んでいきましょう。";
 
   return {
     year,
@@ -470,6 +501,7 @@ export const calculateYearEnd = (year: number, stats: Stats, statsBefore: Stats 
     statChanges,
     statsAfter,
     comment,
+    annualObjective,
   };
 };
 
@@ -477,35 +509,35 @@ export const checkGameOver = (stats: Stats) => {
   if (stats.budget <= -20) {
     return {
       reason: "財政破綻",
-      comment: "予算が底を抜けました。大学から緊急の運営停止判断が出ています。",
+      comment: "今回は、予算の都合でここまでとなりました。次は早めに残額を確かめながら、また一緒に歩んでいきましょう。",
     };
   }
 
   if (stats.staffFatigue >= 100) {
     return {
       reason: "職員崩壊",
-      comment: "職員の疲労が限界に達しました。サービス継続ができません。",
+      comment: "職員のみなさんの休息が必要になり、今回はここまでとなりました。次は私も一緒に、無理のない歩み方を考えますね。",
     };
   }
 
   if (stats.reputation <= 0) {
     return {
       reason: "信頼喪失",
-      comment: "図書館への評判が失われ、学内の支持を保てなくなりました。",
+      comment: "図書館への信頼を立て直す時間が必要になりました。次は小さな声にも耳を傾けながら、一緒に歩み直しましょう。",
     };
   }
 
   if (stats.studentSatisfaction <= 0) {
     return {
       reason: "学生離れ",
-      comment: "学生が図書館を使わなくなりました。学修支援の役割を果たせません。",
+      comment: "学生のみなさんとの距離が広がり、今回はここまでとなりました。次は一人ひとりの声を大切に、一緒に迎えられる場所を作りましょう。",
     };
   }
 
   if (stats.facultyTrust <= 0) {
     return {
       reason: "教員からの信頼喪失",
-      comment: "教員からの信頼を失い、研究教育支援の基盤が崩れました。",
+      comment: "先生方との信頼を育て直す時間が必要になりました。次はお話しする機会を少しずつ増やして、一緒に関係を結び直しましょう。",
     };
   }
 

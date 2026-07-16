@@ -1,7 +1,12 @@
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { formatEffect, metricKeys, statLabels } from "../game/calculations";
+import { formatEffect, getStatMeterPercent, metricKeys, statLabels } from "../game/calculations";
+import { evaluateAnnualObjective } from "../game/annualObjectives";
 import { initialStats } from "../game/initialState";
 import type { StatKey, YearEndResult } from "../game/types";
+import { playSoundEffect } from "../game/soundEffects";
+import { MonthTransition } from "./MonthTransition";
+import { AnnualObjectiveResultPanel } from "./AnnualObjectiveResultPanel";
 
 interface YearEndScreenProps {
   result: YearEndResult;
@@ -50,10 +55,12 @@ const getReflection = (result: YearEndResult) => {
   if (!best || !concern) return result.comment;
   const bestLabel = best.key === "staffFatigue" ? "職員の疲労管理" : statLabels[best.key];
   const concernLabel = concern.key === "staffFatigue" ? "職員の負担軽減" : statLabels[concern.key];
-  return `${bestLabel}は、この1年で頼れる土台になりました。次は${concernLabel}を意識しながら、図書館をもう一段育てていきましょう。`;
+  return `${bestLabel}は、この1年で素敵な土台になりました。次は${concernLabel}にも少し目を向けながら、また一緒に育てていきましょう。`;
 };
 
 export const YearEndScreen = ({ result, onContinue }: YearEndScreenProps) => {
+  const [isMonthTransitioning, setIsMonthTransitioning] = useState(false);
+  const monthTransitionTimerRef = useRef<number | null>(null);
   const statChanges = Object.entries(result.statChanges)
     .filter((entry): entry is [StatKey, number] => entry[1] !== undefined && entry[1] !== 0)
     .map(([key, value]) => formatEffect(key, value));
@@ -62,6 +69,32 @@ export const YearEndScreen = ({ result, onContinue }: YearEndScreenProps) => {
   const librarianUrl = `${import.meta.env.BASE_URL}assets/images/librarian.png`;
   const style = { "--year-end-background": `url(${backgroundUrl})` } as CSSProperties;
   const statsBefore = result.statsBefore ?? (result.year === 1 ? initialStats : result.statsAfter);
+  const annualObjective = result.annualObjective ?? evaluateAnnualObjective(result.year, result.statsAfter);
+  const monthTransition = {
+    currentLabel: `${result.year}年目 3月`,
+    nextLabel: `${result.year + 1}年目 4月`,
+    icon: "local_florist",
+    season: "spring" as const,
+    progress: Math.min(36, result.year * 12 + 1),
+  };
+
+  useEffect(() => () => {
+    if (monthTransitionTimerRef.current !== null) {
+      window.clearTimeout(monthTransitionTimerRef.current);
+    }
+  }, []);
+
+  const continueWithMonthTransition = () => {
+    if (isMonthTransitioning) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    playSoundEffect("calendar_advance");
+    setIsMonthTransitioning(true);
+    monthTransitionTimerRef.current = window.setTimeout(() => {
+      monthTransitionTimerRef.current = null;
+      onContinue();
+    }, reduceMotion ? 40 : 1540);
+  };
 
   return (
     <div className="screen year-end-screen year-end-game" style={style}>
@@ -121,12 +154,14 @@ export const YearEndScreen = ({ result, onContinue }: YearEndScreenProps) => {
                       <b className={`year-end-stat__delta year-end-stat__delta--${getDeltaTone(key, delta)}`}>{formatDelta(delta)}</b>
                     </span>
                   </div>
-                  <span className="year-end-stat__bar" aria-hidden="true"><span style={{ width: `${result.statsAfter[key]}%` }} /></span>
+                  <span className="year-end-stat__bar" aria-hidden="true"><span style={{ width: `${getStatMeterPercent(key, result.statsAfter[key])}%` }} /></span>
                 </div>
                 );
               })}
             </div>
           </section>
+
+          <AnnualObjectiveResultPanel result={annualObjective} />
 
           <section className="year-end-assessment" aria-labelledby="assessment-heading">
             <div className="year-end-section-title">
@@ -156,11 +191,12 @@ export const YearEndScreen = ({ result, onContinue }: YearEndScreenProps) => {
           <strong>{result.comment}</strong>
           <p>{getReflection(result)}</p>
         </div>
-        <button type="button" className="year-end-dialogue__button" onClick={onContinue}>
+        <button type="button" className="year-end-dialogue__button" onClick={continueWithMonthTransition} disabled={isMonthTransitioning}>
           <span>{result.year + 1}年目へ進む</span>
           <span className="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
         </button>
       </footer>
+      {isMonthTransitioning && <MonthTransition transition={monthTransition} />}
     </div>
   );
 };

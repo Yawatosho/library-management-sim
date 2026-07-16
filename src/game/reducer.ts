@@ -1,5 +1,6 @@
 import {
   commandAdvice,
+  finalMonthMessage,
   monthMessages,
   resultExpressions,
   warningMessages,
@@ -8,7 +9,7 @@ import { commandById } from "../data/commands";
 import { policyById } from "../data/policies";
 import { createInitialState } from "./initialState";
 import { getYearMonth } from "./calculations";
-import { resolveTurn } from "./eventResolver";
+import { resolveRandomEventChoice, resolveTurn } from "./eventResolver";
 import type { CommandId, DebugRandomEventMode, GameState, LogEntry, PolicyId, RandomEventId, Screen, Stats } from "./types";
 
 export type GameAction =
@@ -23,6 +24,7 @@ export type GameAction =
   | { type: "TOGGLE_COMMAND"; commandId: CommandId }
   | { type: "CLEAR_COMMANDS" }
   | { type: "EXECUTE_TURN" }
+  | { type: "RESOLVE_RANDOM_EVENT_CHOICE"; choiceId: string }
   | { type: "DISMISS_RESULT" }
   | { type: "CONTINUE_AFTER_YEAR_END" }
   | { type: "DELETE_SAVE" }
@@ -49,13 +51,15 @@ const resetMonthSelection = (state: GameState): GameState => {
     lastResult: null,
     assistant: {
       expression: "normal",
-      message: getMonthMessage(month),
+      message: getMonthMessage(month, state.turn),
     },
   };
 };
 
-const getMonthMessage = (month: number) =>
-  monthMessages[month] ?? "今月の状況を確認して、重点方針を選びましょう。";
+const getMonthMessage = (month: number, turn?: number) =>
+  turn === 36
+    ? finalMonthMessage
+    : monthMessages[month] ?? "今月の状況を確認して、重点方針を選びましょう。";
 
 const setScreen = (state: GameState, screen: Screen): GameState => ({
   ...state,
@@ -90,7 +94,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         ...next,
         assistant: {
           expression: "smile",
-          message: getMonthMessage(month),
+          message: getMonthMessage(month, next.turn),
         },
         log: [{ turn: 1, text: "1年目4月、図書館運営が始まりました。" }],
       };
@@ -102,7 +106,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         screen: "main",
         assistant: {
           expression: "smile",
-          message: getMonthMessage(4),
+          message: getMonthMessage(4, 1),
         },
       });
 
@@ -113,9 +117,9 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       });
 
     case "START_DEBUG_GAME": {
-      const next = createInitialState("main");
       const turn = Math.max(1, Math.min(36, Math.round(action.turn)));
       const { year, month } = getYearMonth(turn);
+      const next = createInitialState("main");
       return withTimestamp({
         ...next,
         turn,
@@ -131,9 +135,11 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       });
     }
 
-    case "CONTINUE_GAME":
+    case "CONTINUE_GAME": {
+      const pendingYearEndStats = state.pendingYearEnd?.statsAfter;
       return withTimestamp({
         ...state,
+        stats: pendingYearEndStats ?? state.stats,
         screen: state.gameOver
           ? "gameOver"
           : state.ending
@@ -146,9 +152,10 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         previousScreen: null,
         assistant: {
           expression: "smile",
-          message: "続きから再開します。今月の方針とAPを確認しましょう。",
+          message: "おかえりなさい。今月も、方針とAPを一緒に確認していきましょう。",
         },
       });
+    }
 
     case "GO_TITLE":
       return withTimestamp({
@@ -158,7 +165,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         lastResult: null,
         assistant: {
           expression: "normal",
-          message: "タイトルに戻りました。続きから再開できます。",
+          message: "タイトルに戻りました。いつでも続きから、ご一緒できますよ。",
         },
       });
 
@@ -183,7 +190,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         selectedPolicyId: action.policyId,
         assistant: {
           expression: "explain",
-          message: `今月の方針は「${policy.name}」ですね。${policy.description}`,
+          message: `今月は「${policy.name}」を大切にするのですね。この方針で、一緒に進めていきましょう。`,
         },
       });
     }
@@ -200,7 +207,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
           apRemaining: state.apRemaining + command.apCost,
           assistant: {
             expression: "normal",
-            message: `「${command.shortName}」を選択から外しました。`,
+            message: `「${command.shortName}」をいったん外しました。ゆっくり選び直して大丈夫ですよ。`,
           },
         });
       }
@@ -210,7 +217,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
           ...state,
           assistant: {
             expression: "worried",
-            message: `APが足りません。「${command.shortName}」には${command.apCost}AP必要です。`,
+            message: `今月のAPでは「${command.shortName}」を選ぶのが難しそうです。${command.apCost}AP必要なので、組み合わせを一緒に考えましょう。`,
           },
         });
       }
@@ -233,7 +240,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         apRemaining: 3,
         assistant: {
           expression: "normal",
-          message: "コマンド選択を解除しました。今月の組み立てを考え直しましょう。",
+          message: "選んだコマンドをいったん戻しました。私と一緒に、ゆっくり選び直しましょう。",
         },
       });
 
@@ -243,7 +250,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
           ...state,
           assistant: {
             expression: "worried",
-            message: "先に今月の重点方針を選びましょう。",
+            message: "まずは今月大切にしたい方針を、一緒に選びましょう。",
           },
         });
       }
@@ -264,6 +271,11 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         logLines.unshift(`${resolved.pendingYearEnd.year}年目の年度末評価を行いました。`);
       }
 
+      const annualObjective = resolved.pendingYearEnd?.annualObjective ?? resolved.ending?.annualObjective;
+      if (annualObjective) {
+        logLines.unshift(`年度重点課題「${annualObjective.objective.title}」: ${annualObjective.completed ? "達成" : `${annualObjective.completedCount}/${annualObjective.conditions.length}`}`);
+      }
+
       return withTimestamp({
         ...state,
         stats: resolved.stats,
@@ -279,10 +291,48 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
             (resolved.gameOver
               ? resolved.gameOver.comment
               : resolved.ending
-                ? `3年間おつかれさまでした。評価は${resolved.ending.rank}です。`
+                ? `3年間、本当におつかれさまでした。一緒に歩んだ図書館の評価は${resolved.ending.rank}です。`
                 : resolved.pendingYearEnd
                   ? resolved.pendingYearEnd.comment
-                  : "今月の処理が終わりました。結果を確認しましょう。"),
+                  : "今月もおつかれさまでした。一緒に結果を見てみましょう。"),
+        },
+      });
+    }
+
+    case "RESOLVE_RANDOM_EVENT_CHOICE": {
+      const resolved = resolveRandomEventChoice(state, action.choiceId);
+      if (!resolved) {
+        return state;
+      }
+
+      const choiceLabel = resolved.result.randomEvent?.choiceLabel ?? "対応方針";
+      const warning = getWarningMessage({ ...state, stats: resolved.stats });
+      const logLines = [`選択式イベント「${choiceLabel}」を選びました。`];
+
+      if (resolved.gameOver) {
+        logLines.unshift(`ゲームオーバー: ${resolved.gameOver.reason}`);
+      } else if (resolved.ending) {
+        logLines.unshift(`最終評価: ${resolved.ending.rank} ${resolved.ending.title}`);
+      } else if (resolved.pendingYearEnd) {
+        logLines.unshift(`${resolved.pendingYearEnd.year}年目の年度末評価を行いました。`);
+      }
+
+      const annualObjective = resolved.pendingYearEnd?.annualObjective ?? resolved.ending?.annualObjective;
+      if (annualObjective) {
+        logLines.unshift(`年度重点課題「${annualObjective.objective.title}」: ${annualObjective.completed ? "達成" : `${annualObjective.completedCount}/${annualObjective.conditions.length}`}`);
+      }
+
+      return withTimestamp({
+        ...state,
+        stats: resolved.stats,
+        lastResult: resolved.result,
+        pendingYearEnd: resolved.pendingYearEnd,
+        ending: resolved.ending,
+        gameOver: resolved.gameOver,
+        log: pushLog(state, logLines),
+        assistant: {
+          expression: warning ? "worried" : "explain",
+          message: warning ?? `「${choiceLabel}」で進めるのですね。選んだ結果を一緒に確認しましょう。`,
         },
       });
     }
@@ -297,7 +347,11 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       }
 
       if (state.pendingYearEnd) {
-        return withTimestamp(setScreen({ ...state, lastResult: null }, "yearEnd"));
+        return withTimestamp(setScreen({
+          ...state,
+          stats: state.pendingYearEnd.statsAfter,
+          lastResult: null,
+        }, "yearEnd"));
       }
 
       const advanced = resetMonthSelection({
@@ -311,6 +365,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       const nextYearStartStats = { ...(state.pendingYearEnd?.statsAfter ?? state.stats) };
       const advanced = resetMonthSelection({
         ...state,
+        stats: nextYearStartStats,
         screen: "main",
         pendingYearEnd: null,
         yearStartStats: nextYearStartStats,
@@ -320,7 +375,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         ...advanced,
         assistant: {
           expression: "cheer",
-          message: "新年度です。予算が更新されました。ここからまた立て直せます。",
+          message: "新年度ですね。新しい予算で、また一緒に図書館を育てていきましょう。",
         },
       });
     }

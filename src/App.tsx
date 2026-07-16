@@ -7,6 +7,8 @@ import { MainScreen } from "./components/MainScreen";
 import { playScreenBgm, stopSeasonalBgm } from "./components/SeasonalBgm";
 import { TitleScreen } from "./components/TitleScreen";
 import { YearEndScreen } from "./components/YearEndScreen";
+import { trackScreenView } from "./game/analytics";
+import { unlockEndingMemory, unlockRandomEventMemory } from "./game/memoryCollection";
 import { gameReducer } from "./game/reducer";
 import { deleteGame, loadGame, saveGame } from "./game/storage";
 
@@ -18,17 +20,34 @@ export const App = () => {
   const canContinue = state.turn > 1 || state.log.length > 0 || state.ending !== null || state.gameOver !== null;
 
   useEffect(() => {
+    trackScreenView(state.screen);
+  }, [state.screen]);
+
+  useEffect(() => {
     if (!isBlankTitleState(state.screen, state.turn, state.log.length)) {
       saveGame(state);
     }
   }, [state]);
 
   useEffect(() => {
+    const eventId = state.lastResult?.randomEvent?.event.id;
+    if (eventId) {
+      unlockRandomEventMemory(eventId);
+    }
+
+    if (state.ending) {
+      unlockEndingMemory(state.ending.rank);
+    }
+  }, [state.lastResult?.randomEvent?.event.id, state.ending]);
+
+  useEffect(() => {
     if (state.screen === "yearEnd") {
       playScreenBgm("report");
     } else if (state.screen === "ending") {
       playScreenBgm("ending");
-    } else if (state.screen === "title" || state.screen === "gameOver") {
+    } else if (state.screen === "gameOver") {
+      playScreenBgm("gameover");
+    } else if (state.screen === "title") {
       stopSeasonalBgm();
     }
   }, [state.screen]);

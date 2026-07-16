@@ -5,3 +5,6 @@ dist
 *.local
 *.tsbuildinfo
 作業用/
+public/assets/bgm/*_old.mp3
+public/assets/images/random-events/old/
+public/assets/images/random-events/1fb6330a-e2d6-4b43-ad6c-bdd8353f36bd.png

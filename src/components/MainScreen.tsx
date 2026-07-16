@@ -1,13 +1,16 @@
 import type { CSSProperties, Dispatch } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { commandById } from "../data/commands";
 import { policyById } from "../data/policies";
 import { seasonalEventByMonth } from "../data/seasonalEvents";
-import { calculateAppliedCommand, formatEffect, getYearMonth, statKeys } from "../game/calculations";
+import { calculateAppliedCommand, finalEvaluationTarget, formatEffect, getYearMonth, statKeys } from "../game/calculations";
+import { evaluateAnnualObjective } from "../game/annualObjectives";
 import type { GameAction } from "../game/reducer";
 import { getSeason, seasonMeta } from "../game/seasons";
+import { playSoundEffect } from "../game/soundEffects";
 import type { CommandId, GameState, StatKey } from "../game/types";
 import { CommandPanel } from "./CommandPanel";
+import { AnnualObjectiveBadge, AnnualObjectiveModal } from "./AnnualObjectivePanel";
 import { PolicyModal } from "./PolicyModal";
 import { ResultModal } from "./ResultModal";
 import { SeasonalBgm } from "./SeasonalBgm";
@@ -111,15 +114,21 @@ const StatusPill = ({
 
 export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
   const [librarianImageFailed, setLibrarianImageFailed] = useState(false);
+  const [librarianExpressionImageFailed, setLibrarianExpressionImageFailed] = useState(false);
   const [randomEventImageFailed, setRandomEventImageFailed] = useState(false);
   const [policyModalOpen, setPolicyModalOpen] = useState(false);
+  const [objectiveModalOpen, setObjectiveModalOpen] = useState(false);
   const [previewCommandId, setPreviewCommandId] = useState<CommandId | null>(null);
   const [viewedRandomEventKey, setViewedRandomEventKey] = useState<string | null>(null);
+  const [isMonthTransitioning, setIsMonthTransitioning] = useState(false);
+  const monthTransitionTimerRef = useRef<number | null>(null);
+  const announcedResultKeyRef = useRef<string | null>(null);
   const { year, month } = getYearMonth(state.turn);
+  const annualObjective = evaluateAnnualObjective(year, state.stats);
   const seasonalEvent = seasonalEventByMonth[month];
   const season = getSeason(month);
   const seasonInfo = seasonMeta[season];
-  const selectedPolicyName = state.selectedPolicyId ? policyById[state.selectedPolicyId].name : "未選択";
+  const selectedPolicyName = state.selectedPolicyId ? policyById[state.selectedPolicyId].name : "方針を選択";
   const resultOpen = state.lastResult !== null;
   const randomEventKey = state.lastResult?.randomEvent
     ? `${state.lastResult.turn}:${state.lastResult.randomEvent.event.id}`
@@ -130,6 +139,10 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
     randomEventKey !== null &&
     viewedRandomEventKey !== randomEventKey;
   const activeRandomEvent = showRandomEventScene ? state.lastResult?.randomEvent : null;
+  const activeRandomEventChoices =
+    activeRandomEvent?.event.choices && !activeRandomEvent.choiceId
+      ? activeRandomEvent.event.choices
+      : null;
   const activeRandomEventEffects = activeRandomEvent ? effectList(activeRandomEvent.effects) : [];
   const previewEffects: Partial<Record<StatKey, number>> = (() => {
     if (previewCommandId === null) {
@@ -151,27 +164,107 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
     return { budget: -command.budgetCost, ...command.effects };
   })();
   const backgroundUrl = `${import.meta.env.BASE_URL}assets/images/background.png`;
-  const librarianImageName =
+  const librarianImagePrefix =
     season === "summer"
-      ? "librarian_summer.png"
+      ? "librarian_summer"
       : season === "winter"
-        ? "librarian_winter.png"
-        : "librarian.png";
+        ? "librarian_winter"
+        : "librarian";
+  const librarianExpression = ["cheer", "worried", "explain"].includes(state.assistant.expression)
+    ? state.assistant.expression
+    : null;
+  const librarianImageName = librarianExpression
+    ? `${librarianImagePrefix}_${librarianExpression}.png`
+    : `${librarianImagePrefix}.png`;
   const librarianUrl = `${import.meta.env.BASE_URL}assets/images/${librarianImageName}`;
+  const librarianFallbackUrl = `${import.meta.env.BASE_URL}assets/images/${librarianImagePrefix}.png`;
+  const displayedLibrarianUrl = librarianExpressionImageFailed ? librarianFallbackUrl : librarianUrl;
   const randomEventImageUrl = activeRandomEvent
-    ? `${import.meta.env.BASE_URL}assets/images/random-events/${activeRandomEvent.event.id}.png`
+    ? `${import.meta.env.BASE_URL}assets/images/random-events/${activeRandomEvent.event.imageId ?? activeRandomEvent.event.id}.png`
     : "";
   const screenStyle = {
     "--game-background": `url(${backgroundUrl})`,
   } as CSSProperties;
+  const nextTurn = Math.min(36, state.turn + 1);
+  const nextDate = getYearMonth(nextTurn);
+  const nextSeason = getSeason(nextDate.month);
+  const nextSeasonInfo = seasonMeta[nextSeason];
+  const monthTransition = state.gameOver
+    ? {
+        currentLabel: `${year}年目 ${month}月`,
+        nextLabel: "運営記録へ",
+        icon: "menu_book",
+        season,
+        progress: state.turn,
+      }
+    : state.ending
+      ? {
+          currentLabel: `${year}年目 ${month}月`,
+          nextLabel: "最終評価へ",
+          icon: "workspace_premium",
+          season,
+          progress: 36,
+        }
+      : state.pendingYearEnd
+        ? {
+            currentLabel: `${year}年目 ${month}月`,
+            nextLabel: `${year}年目 年度末評価`,
+            icon: "fact_check",
+            season,
+            progress: state.turn,
+          }
+        : {
+            currentLabel: `${year}年目 ${month}月`,
+            nextLabel: `${nextDate.year}年目 ${nextDate.month}月`,
+            icon: nextSeasonInfo.icon,
+            season: nextSeason,
+            progress: nextTurn,
+          };
 
   useEffect(() => {
     setLibrarianImageFailed(false);
-  }, [librarianUrl]);
+    setLibrarianExpressionImageFailed(false);
+  }, [librarianUrl, librarianFallbackUrl]);
 
   useEffect(() => {
     setRandomEventImageFailed(false);
   }, [randomEventKey]);
+
+  useEffect(() => {
+    if (!state.lastResult) {
+      announcedResultKeyRef.current = null;
+      return;
+    }
+
+    const resultKey = `${state.lastResult.turn}:${state.lastResult.randomEvent?.event.id ?? "report"}`;
+    if (announcedResultKeyRef.current === resultKey) return;
+
+    announcedResultKeyRef.current = resultKey;
+    playSoundEffect(state.lastResult.randomEvent ? "event" : "report_open");
+  }, [state.lastResult]);
+
+  useEffect(() => {
+    if (resultOpen) setObjectiveModalOpen(false);
+  }, [resultOpen]);
+
+  useEffect(() => () => {
+    if (monthTransitionTimerRef.current !== null) {
+      window.clearTimeout(monthTransitionTimerRef.current);
+    }
+  }, []);
+
+  const dismissResultWithMonthTransition = () => {
+    if (isMonthTransitioning || state.lastResult === null) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    playSoundEffect("calendar_advance");
+    setIsMonthTransitioning(true);
+    monthTransitionTimerRef.current = window.setTimeout(() => {
+      monthTransitionTimerRef.current = null;
+      setIsMonthTransitioning(false);
+      dispatch({ type: "DISMISS_RESULT" });
+    }, reduceMotion ? 40 : 1540);
+  };
 
   return (
     <div className={`screen main-screen sim-screen sim-screen--${season}`} style={screenStyle}>
@@ -181,7 +274,6 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
             <span className="material-symbols-rounded">{seasonInfo.icon}</span>
           </div>
           <div className="sim-calendar__body">
-            <span className="eyebrow">University Library Maker</span>
             <h1>
               {year}年目 {month}月
             </h1>
@@ -202,7 +294,7 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
             icon="flag"
             label="重点方針"
             value={selectedPolicyName}
-            className="status-pill status-pill--wide"
+            className={`status-pill status-pill--wide ${state.selectedPolicyId ? "" : "status-pill--prompt"}`}
             onClick={() => setPolicyModalOpen(true)}
             disabled={resultOpen}
           />
@@ -228,7 +320,7 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
             icon="volunteer_activism"
             label="職員士気"
             value={state.stats.staffMorale}
-            meterValue={state.stats.staffMorale}
+            meterValue={state.stats.staffMorale / finalEvaluationTarget * 100}
             previewDelta={previewEffects.staffMorale}
             previewTone={
               previewEffects.staffMorale === undefined || previewEffects.staffMorale === 0
@@ -241,14 +333,24 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
           />
         </section>
 
-        <div className="topbar__actions">
-          <SeasonalBgm season={season} />
-          <button type="button" className="ghost-button" onClick={() => dispatch({ type: "OPEN_HELP" })}>
-            ヘルプ
-          </button>
-          <button type="button" className="ghost-button" onClick={() => dispatch({ type: "GO_TITLE" })}>
-            タイトル
-          </button>
+        <div className="sim-topbar-tools">
+          <AnnualObjectiveBadge
+            result={annualObjective}
+            onOpen={() => setObjectiveModalOpen(true)}
+            disabled={resultOpen}
+            variant="topbar"
+          />
+          <div className="topbar__actions">
+            <SeasonalBgm season={season} />
+            <button type="button" className="ghost-button sim-utility-button" onClick={() => dispatch({ type: "OPEN_HELP" })}>
+              <span className="material-symbols-rounded" aria-hidden="true">menu_book</span>
+              <span>ヘルプ</span>
+            </button>
+            <button type="button" className="ghost-button sim-utility-button" onClick={() => dispatch({ type: "GO_TITLE" })}>
+              <span className="material-symbols-rounded" aria-hidden="true">home</span>
+              <span>タイトル</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -258,9 +360,15 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
             selectedCommandIds={state.selectedCommandIds}
             apRemaining={state.apRemaining}
             selectedPolicyId={state.selectedPolicyId}
-            onToggle={(commandId) => dispatch({ type: "TOGGLE_COMMAND", commandId })}
+            onToggle={(commandId) => {
+              playSoundEffect(state.selectedCommandIds.includes(commandId) ? "ui_cancel" : "ui_select");
+              dispatch({ type: "TOGGLE_COMMAND", commandId });
+            }}
             onExecute={() => dispatch({ type: "EXECUTE_TURN" })}
-            onClear={() => dispatch({ type: "CLEAR_COMMANDS" })}
+            onClear={() => {
+              playSoundEffect("ui_cancel");
+              dispatch({ type: "CLEAR_COMMANDS" });
+            }}
             onPreviewChange={setPreviewCommandId}
             disabled={resultOpen}
           />
@@ -293,7 +401,11 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
               ) : (
                 <div className="sim-stage__random-placeholder">
                   <span className="material-symbols-rounded" aria-hidden="true">
-                    {activeRandomEvent.event.tone === "good" ? "auto_awesome" : "warning"}
+                    {activeRandomEvent.event.tone === "good"
+                      ? "auto_awesome"
+                      : activeRandomEvent.event.tone === "choice"
+                        ? "multiple_stop"
+                        : "warning"}
                   </span>
                   <strong>{activeRandomEvent.event.title}</strong>
                   <small>assets/images/random-events/{activeRandomEvent.event.id}.png</small>
@@ -303,7 +415,17 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
           ) : (
             <div className="sim-stage__character" aria-label="司書さん">
               {!librarianImageFailed ? (
-                <img src={librarianUrl} alt="司書さん" onError={() => setLibrarianImageFailed(true)} />
+                <img
+                  src={displayedLibrarianUrl}
+                  alt="司書さん"
+                  onError={() => {
+                    if (displayedLibrarianUrl !== librarianFallbackUrl) {
+                      setLibrarianExpressionImageFailed(true);
+                    } else {
+                      setLibrarianImageFailed(true);
+                    }
+                  }}
+                />
               ) : (
                 <div className="sim-stage__placeholder">
                   <span>司書さん</span>
@@ -331,11 +453,11 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
         >
           <div className="dialogue-window__name">{activeRandomEvent ? "ランダムイベント" : "司書さん"}</div>
           {activeRandomEvent ? (
-            <div className="dialogue-window__event-content">
+            <div className={`dialogue-window__event-content ${activeRandomEventChoices ? "dialogue-window__event-content--choice" : ""}`}>
               <div className="dialogue-window__event-text">
-                <span>{activeRandomEvent.event.title}</span>
-                <p>{activeRandomEvent.event.description}</p>
-                {activeRandomEventEffects.length > 0 && (
+                {!activeRandomEvent.choiceId && <span>{activeRandomEvent.event.title}</span>}
+                <p>{activeRandomEvent.choiceResultMessage ?? activeRandomEvent.event.description}</p>
+                {!activeRandomEventChoices && activeRandomEventEffects.length > 0 && (
                   <div className="dialogue-window__event-effects" aria-label="イベント効果">
                     {activeRandomEventEffects.map((item) => (
                       <span key={item}>{item}</span>
@@ -343,15 +465,41 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
                   </div>
                 )}
               </div>
-              <button
-                type="button"
-                className="primary-button dialogue-window__event-button"
-                onClick={() => {
-                  setViewedRandomEventKey(randomEventKey);
-                }}
-              >
-                月次レポートへ
-              </button>
+              {activeRandomEventChoices ? (
+                <div className="dialogue-window__choices" aria-label="対応を選択">
+                  {activeRandomEventChoices.map((choice) => (
+                    <button
+                      type="button"
+                      key={choice.id}
+                      className="dialogue-window__choice"
+                      onClick={() => {
+                        playSoundEffect("ui_select");
+                        dispatch({ type: "RESOLVE_RANDOM_EVENT_CHOICE", choiceId: choice.id });
+                      }}
+                    >
+                      <span className="dialogue-window__choice-heading">
+                        <strong>{choice.label}</strong>
+                        <span className="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+                      </span>
+                      <span className="dialogue-window__choice-description">{choice.description}</span>
+                      <span className="dialogue-window__choice-effects">
+                        {effectList(choice.effects).map((item) => <small key={item}>{item}</small>)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="primary-button dialogue-window__event-button"
+                  onClick={() => {
+                    playSoundEffect("report_open");
+                    setViewedRandomEventKey(randomEventKey);
+                  }}
+                >
+                  月次レポートへ
+                </button>
+              )}
             </div>
           ) : (
             <p>{state.assistant.message}</p>
@@ -362,11 +510,23 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
       {policyModalOpen && (
         <PolicyModal
           selectedPolicyId={state.selectedPolicyId}
-          onSelect={(policyId) => dispatch({ type: "SELECT_POLICY", policyId })}
+          onSelect={(policyId) => {
+            playSoundEffect("ui_select");
+            dispatch({ type: "SELECT_POLICY", policyId });
+          }}
           onClose={() => setPolicyModalOpen(false)}
         />
       )}
-      <ResultModal result={showRandomEventScene ? null : state.lastResult} onClose={() => dispatch({ type: "DISMISS_RESULT" })} />
+
+      {objectiveModalOpen && (
+        <AnnualObjectiveModal result={annualObjective} onClose={() => setObjectiveModalOpen(false)} />
+      )}
+      <ResultModal
+        result={showRandomEventScene ? null : state.lastResult}
+        transition={monthTransition}
+        isClosing={isMonthTransitioning}
+        onClose={dismissResultWithMonthTransition}
+      />
     </div>
   );
 };

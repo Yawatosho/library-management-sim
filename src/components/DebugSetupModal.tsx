@@ -2,6 +2,7 @@ import { useState } from "react";
 import { randomEvents } from "../data/randomEvents";
 import { initialStats } from "../game/initialState";
 import { calculateEnding, formatEffect, statKeys, statLabels } from "../game/calculations";
+import { RANDOM_EVENT_RATE } from "../game/eventResolver";
 import type { DebugRandomEventMode, RandomEventId, Stats } from "../game/types";
 
 export interface DebugGameConfig {
@@ -23,12 +24,12 @@ const dates = Array.from({ length: 36 }, (_, index) => {
 });
 
 const rankPresets = [
-  { rank: "S", score: 94, label: "伝説" },
-  { rank: "A", score: 85, label: "信頼" },
-  { rank: "B", score: 72, label: "堅実" },
-  { rank: "C", score: 57, label: "継続" },
-  { rank: "D", score: 42, label: "要改革" },
-  { rank: "E", score: 20, label: "危機" },
+  { rank: "S", score: 114, label: "伝説" },
+  { rank: "A", score: 103, label: "信頼" },
+  { rank: "B", score: 95, label: "堅実" },
+  { rank: "C", score: 88, label: "継続" },
+  { rank: "D", score: 80, label: "要改革" },
+  { rank: "E", score: 66, label: "危機" },
 ] as const;
 
 const createRankPresetStats = (score: number): Stats => ({
@@ -38,13 +39,21 @@ const createRankPresetStats = (score: number): Stats => ({
   facultyTrust: score,
   executiveTrust: score,
   publicity: score,
-  staffMorale: score,
-  staffFatigue: 100 - score,
+  staffMorale: 80,
+  staffFatigue: 30,
   facility: score,
   researchSupport: score,
   dx: score,
   reputation: score,
 });
+
+const gameOverPresets = [
+  { key: "budget", value: -20, icon: "payments", label: "財政破綻", note: "予算 -20" },
+  { key: "staffFatigue", value: 100, icon: "battery_alert", label: "職員崩壊", note: "疲労 100" },
+  { key: "reputation", value: 0, icon: "stars", label: "信頼喪失", note: "評判 0" },
+  { key: "studentSatisfaction", value: 0, icon: "school", label: "学生離れ", note: "満足度 0" },
+  { key: "facultyTrust", value: 0, icon: "groups", label: "教員信頼喪失", note: "教員信頼 0" },
+] as const satisfies ReadonlyArray<{ key: keyof Stats; value: number; icon: string; label: string; note: string }>;
 
 export const DebugSetupModal = ({ onClose, onStart }: DebugSetupModalProps) => {
   const [turn, setTurn] = useState(1);
@@ -55,13 +64,23 @@ export const DebugSetupModal = ({ onClose, onStart }: DebugSetupModalProps) => {
   const previewEnding = calculateEnding(stats);
 
   const updateStat = (key: keyof Stats, value: number) => {
-    const normalized = key === "budget" ? Math.max(-50, Math.min(300, value)) : Math.max(0, Math.min(100, value));
+    const normalized = key === "budget"
+      ? Math.max(-50, Math.min(300, value))
+      : key === "staffFatigue"
+        ? Math.max(0, Math.min(100, value))
+        : Math.max(0, Math.min(300, value));
     setStats((current) => ({ ...current, [key]: normalized }));
   };
 
   const applyRankPreset = (score: number) => {
     setTurn(36);
     setStats(createRankPresetStats(score));
+    setRandomEventMode("disable");
+  };
+
+  const applyGameOverPreset = (key: keyof Stats, value: number) => {
+    setTurn(1);
+    setStats({ ...initialStats, [key]: value });
     setRandomEventMode("disable");
   };
 
@@ -105,13 +124,29 @@ export const DebugSetupModal = ({ onClose, onStart }: DebugSetupModalProps) => {
           </div>
         </div>
 
+        <div className="debug-section debug-game-over-section">
+          <div className="debug-section__heading">
+            <span>ゲームオーバー確認</span>
+            <small>メイン画面で次月へ進めると表示</small>
+          </div>
+          <div className="debug-game-over-presets" aria-label="ゲームオーバー条件のプリセット">
+            {gameOverPresets.map((preset) => (
+              <button key={preset.key} type="button" onClick={() => applyGameOverPreset(preset.key, preset.value)}>
+                <span className="material-symbols-rounded" aria-hidden="true">{preset.icon}</span>
+                <strong>{preset.label}</strong>
+                <small>{preset.note}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="debug-section">
           <div className="debug-section__heading"><span>パラメータ</span><button type="button" className="text-button" onClick={() => setStats({ ...initialStats })}>初期値に戻す</button></div>
           <div className="debug-stat-grid">
             {statKeys.map((key) => (
               <label key={key}>
                 <span>{statLabels[key]}</span>
-                <input type="number" min={key === "budget" ? -50 : 0} max={key === "budget" ? 300 : 100} value={stats[key]} onChange={(event) => updateStat(key, Number(event.target.value))} />
+                <input type="number" min={key === "budget" ? -50 : 0} max={key === "staffFatigue" ? 100 : 300} value={stats[key]} onChange={(event) => updateStat(key, Number(event.target.value))} />
               </label>
             ))}
           </div>
@@ -119,7 +154,7 @@ export const DebugSetupModal = ({ onClose, onStart }: DebugSetupModalProps) => {
 
         <fieldset className="debug-section debug-event-mode">
           <legend>ランダムイベント</legend>
-          <label><input type="radio" name="random-event" checked={randomEventMode === "normal"} onChange={() => setRandomEventMode("normal")} />通常抽選（30%）</label>
+          <label><input type="radio" name="random-event" checked={randomEventMode === "normal"} onChange={() => setRandomEventMode("normal")} />通常抽選（{Math.round(RANDOM_EVENT_RATE * 100)}%）</label>
           <label><input type="radio" name="random-event" checked={randomEventMode === "force"} onChange={() => setRandomEventMode("force")} />必ず発生</label>
           <label><input type="radio" name="random-event" checked={randomEventMode === "disable"} onChange={() => setRandomEventMode("disable")} />発生しない</label>
           {randomEventMode === "force" && (
@@ -127,14 +162,18 @@ export const DebugSetupModal = ({ onClose, onStart }: DebugSetupModalProps) => {
               <label htmlFor="debug-random-event">発生イベント</label>
               <select id="debug-random-event" value={randomEventId} onChange={(event) => setRandomEventId(event.target.value as RandomEventId)}>
                 {randomEvents.map((event) => (
-                  <option key={event.id} value={event.id}>{event.tone === "good" ? "GOOD" : "BAD"}｜{event.title}</option>
+                  <option key={event.id} value={event.id}>
+                    {event.tone === "good" ? "GOOD" : event.tone === "bad" ? "BAD" : "CHOICE"}｜{event.title}
+                  </option>
                 ))}
               </select>
               <p>{selectedRandomEvent.description}</p>
               <div className="debug-event-effects">
-                {Object.entries(selectedRandomEvent.effects).map(([key, value]) => (
-                  <span key={key}>{formatEffect(key as keyof Stats, value ?? 0)}</span>
-                ))}
+                {selectedRandomEvent.choices
+                  ? selectedRandomEvent.choices.map((choice) => <span key={choice.id}>{choice.label}</span>)
+                  : Object.entries(selectedRandomEvent.effects).map(([key, value]) => (
+                      <span key={key}>{formatEffect(key as keyof Stats, value ?? 0)}</span>
+                    ))}
               </div>
             </div>
           )}

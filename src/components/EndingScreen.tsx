@@ -1,7 +1,10 @@
-import type { CSSProperties } from "react";
-import { useState } from "react";
-import { metricKeys, statLabels } from "../game/calculations";
+import type { CSSProperties, KeyboardEvent } from "react";
+import { useMemo, useState } from "react";
+import { randomEvents } from "../data/randomEvents";
+import { getStatMeterPercent, metricKeys, statLabels } from "../game/calculations";
+import { evaluateAnnualObjective } from "../game/annualObjectives";
 import type { EndingResult, StatKey, Stats } from "../game/types";
+import { AnnualObjectiveResultPanel } from "./AnnualObjectiveResultPanel";
 
 interface EndingScreenProps {
   ending: EndingResult;
@@ -30,18 +33,112 @@ const getStatTone = (key: StatKey, value: number) => {
   return "steady";
 };
 
+const creditItems = [
+  { role: "Illustration", name: "Chat GPT" },
+  { role: "Programing", name: "Chat GPT" },
+  { role: "Music", name: "Suno" },
+  { role: "Sound Effect", name: "効果音ラボ" },
+  { role: "Special Thanks", name: "図書館を愛する皆様" },
+] as const;
+
 export const EndingScreen = ({ ending, stats, onTitle }: EndingScreenProps) => {
-  const [phase, setPhase] = useState<"report" | "epilogue">("report");
+  const [phase, setPhase] = useState<"report" | "epilogue" | "credits">("report");
   const [imageFailed, setImageFailed] = useState(false);
+  const [creditsComplete, setCreditsComplete] = useState(false);
   const rank = ending.rank.toLowerCase();
   const backgroundUrl = `${import.meta.env.BASE_URL}assets/images/background.png`;
   const librarianUrl = `${import.meta.env.BASE_URL}assets/images/librarian.png`;
   const endingImageUrl = `${import.meta.env.BASE_URL}assets/images/endings/rank-${rank}.png`;
   const style = { "--year-end-background": `url(${backgroundUrl})` } as CSSProperties;
+  const annualObjective = ending.annualObjective ?? evaluateAnnualObjective(3, stats);
+  const creditMemoryImages = useMemo(() => {
+    const images = [...new Set(randomEvents.map((event) => `${event.imageId ?? event.id}.png`))];
+    for (let index = images.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [images[index], images[swapIndex]] = [images[swapIndex]!, images[index]!];
+    }
+    return images.slice(0, 6);
+  }, []);
+
+  const handleCreditsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (creditsComplete && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      onTitle();
+    }
+  };
+
+  if (phase === "credits") {
+    return (
+      <div
+        className={`screen ending-credits ${creditsComplete ? "ending-credits--complete" : ""}`}
+        role="button"
+        tabIndex={0}
+        aria-label={creditsComplete ? "スタッフロール終了。クリックしてタイトルへ戻る" : "スタッフロール"}
+        onClick={() => {
+          if (creditsComplete) onTitle();
+        }}
+        onKeyDown={handleCreditsKeyDown}
+      >
+        <div className="ending-credits__memories" aria-hidden="true">
+          {creditMemoryImages.map((imageName, index) => {
+            const memoryStyle = {
+              "--memory-delay": `${index * 4.4}s`,
+              "--memory-rotation": `${index % 2 === 0 ? -1.8 : 1.4}deg`,
+            } as CSSProperties;
+            return (
+              <figure
+                key={imageName}
+                className="ending-credits__photo-frame ending-credits__memory"
+                style={memoryStyle}
+              >
+                <img src={`${import.meta.env.BASE_URL}assets/images/random-events/${imageName}`} alt="" />
+              </figure>
+            );
+          })}
+        </div>
+        <div className="ending-credits__shade" aria-hidden="true" />
+        <header className="ending-credits__header">
+          <span>UNIVERSITY LIBRARY MAKER</span>
+          <small>STAFF ROLL</small>
+        </header>
+        <div className="ending-credits__roll">
+          {creditItems.map((item) => (
+            <section key={item.role} className="ending-credits__item">
+              <span>{item.role}</span>
+              <strong>{item.name}</strong>
+            </section>
+          ))}
+        </div>
+        <section className="ending-credits__final" onAnimationEnd={() => setCreditsComplete(true)}>
+          <figure className="ending-credits__photo-frame ending-credits__final-photo">
+            <img src={endingImageUrl} alt={`${ending.rank}ランク ${ending.title}の思い出`} />
+          </figure>
+          <div className="ending-credits__final-copy">
+            <span>Produce</span>
+            <strong>やわらか図書館学</strong>
+            <h1>Thank you for playing</h1>
+            <small className="ending-credits__return">CLICK TO TITLE</small>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   if (phase === "epilogue") {
     return (
-      <div className={`screen ending-epilogue ending-epilogue--${rank}`}>
+      <div
+        className={`screen ending-epilogue ending-epilogue--${rank}`}
+        role="button"
+        tabIndex={0}
+        aria-label="エピローグ。クリックしてスタッフロールへ"
+        onClick={() => setPhase("credits")}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setPhase("credits");
+          }
+        }}
+      >
         {!imageFailed ? (
           <img className="ending-epilogue__image" src={endingImageUrl} alt={`${ending.rank}ランク ${ending.title}のエピローグ`} onError={() => setImageFailed(true)} />
         ) : (
@@ -61,10 +158,7 @@ export const EndingScreen = ({ ending, stats, onTitle }: EndingScreenProps) => {
             <h1 id="epilogue-heading">{ending.title}</h1>
             <strong>{ending.comment}</strong>
           </div>
-          <button type="button" onClick={onTitle}>
-            <span>タイトルへ</span>
-            <span className="material-symbols-rounded" aria-hidden="true">home</span>
-          </button>
+          <span className="ending-epilogue__next">CLICK TO STAFF ROLL</span>
         </section>
       </div>
     );
@@ -117,11 +211,13 @@ export const EndingScreen = ({ ending, stats, onTitle }: EndingScreenProps) => {
                     <small>{statLabels[key]}</small>
                     <span className="year-end-stat__values"><strong>{stats[key]}</strong></span>
                   </div>
-                  <span className="year-end-stat__bar" aria-hidden="true"><span style={{ width: `${stats[key]}%` }} /></span>
+                  <span className="year-end-stat__bar" aria-hidden="true"><span style={{ width: `${getStatMeterPercent(key, stats[key])}%` }} /></span>
                 </div>
               ))}
             </div>
           </section>
+
+          <AnnualObjectiveResultPanel result={annualObjective} />
 
           <p className="ending-final-report__comment">{ending.comment}</p>
         </section>
@@ -139,7 +235,7 @@ export const EndingScreen = ({ ending, stats, onTitle }: EndingScreenProps) => {
         <span className="year-end-dialogue__name">司書さん</span>
         <div className="year-end-dialogue__message">
           <strong>3年間、本当におつかれさまでした。</strong>
-          <p>あなたが育てた図書館の、その後を見届けましょう。</p>
+          <p>あなたと一緒に育てた図書館の、その後を見届けましょう。</p>
         </div>
         <button type="button" className="year-end-dialogue__button" onClick={() => setPhase("epilogue")}>
           <span>エピローグを見る</span>

@@ -5,7 +5,8 @@ interface SeasonalBgmProps {
   season: SeasonId;
 }
 
-type ScreenBgmId = "report" | "ending";
+type ScreenBgmId = "report" | "ending" | "gameover";
+export type GameBgmId = SeasonId | ScreenBgmId;
 
 const BGM_VOLUME = 0.34;
 const BGM_PREF_KEY = "library-management-sim.bgm.enabled.v1";
@@ -100,7 +101,7 @@ const startPlayback = async (audio: HTMLAudioElement) => {
   }
 };
 
-interface TrackCallbacks {
+export interface TrackCallbacks {
   onStarted?: () => void;
   onBlocked?: () => void;
 }
@@ -146,9 +147,14 @@ const switchSharedTrack = (
   void startTrack();
 };
 
-const loadBgmPreference = () => {
+export const loadBgmPreference = () => {
   if (typeof window === "undefined") return true;
   return window.localStorage.getItem(BGM_PREF_KEY) !== "off";
+};
+
+export const saveBgmPreference = (enabled: boolean) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(BGM_PREF_KEY, enabled ? "on" : "off");
 };
 
 export const BgmPreferenceButton = () => {
@@ -173,6 +179,15 @@ export const BgmPreferenceButton = () => {
       {enabled ? "BGM ON" : "BGM OFF"}
     </button>
   );
+};
+
+export const playAlbumBgmTrack = (
+  track: GameBgmId,
+  callbacks: TrackCallbacks = {},
+  fadeInDuration = 700,
+) => {
+  const trackUrl = `${import.meta.env.BASE_URL}assets/bgm/${track}.mp3`;
+  switchSharedTrack(`album:${track}`, trackUrl, fadeInDuration, callbacks);
 };
 
 export const playScreenBgm = (track: ScreenBgmId) => {

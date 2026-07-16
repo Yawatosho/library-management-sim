@@ -1,10 +1,13 @@
 import type { CSSProperties } from "react";
 import { formatEffect, statKeys, statLabels } from "../game/calculations";
 import type { StatKey, TurnResult } from "../game/types";
+import { MonthTransition, type MonthTransitionData } from "./MonthTransition";
 
 interface ResultModalProps {
   result: TurnResult | null;
   onClose: () => void;
+  isClosing?: boolean;
+  transition: MonthTransitionData;
 }
 
 const effectList = (effects: Partial<Record<StatKey, number>>) =>
@@ -107,7 +110,7 @@ const StatDeltaBoard = ({ items }: { items: StatDelta[] }) => {
   );
 };
 
-export const ResultModal = ({ result, onClose }: ResultModalProps) => {
+export const ResultModal = ({ result, onClose, isClosing = false, transition }: ResultModalProps) => {
   if (!result) {
     return null;
   }
@@ -116,7 +119,7 @@ export const ResultModal = ({ result, onClose }: ResultModalProps) => {
   const randomEffects = result.randomEvent ? effectList(result.randomEvent.effects) : [];
   const statDeltas = createStatDeltas(result);
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
+    if (!isClosing && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       onClose();
     }
@@ -124,11 +127,14 @@ export const ResultModal = ({ result, onClose }: ResultModalProps) => {
 
   return (
     <div
-      className="modal-backdrop result-backdrop"
+      className={`modal-backdrop result-backdrop ${isClosing ? "result-backdrop--transitioning" : ""}`}
       role="button"
       tabIndex={0}
       aria-label="月次結果を閉じて次の月へ進む"
-      onClick={onClose}
+      aria-busy={isClosing}
+      onClick={() => {
+        if (!isClosing) onClose();
+      }}
       onKeyDown={handleKeyDown}
     >
       <section className="modal result-modal" role="dialog" aria-modal="true" aria-labelledby="result-heading">
@@ -174,7 +180,8 @@ export const ResultModal = ({ result, onClose }: ResultModalProps) => {
             {result.randomEvent ? (
               <p>
                 <strong>{result.randomEvent.event.title}</strong>
-                <small>{result.randomEvent.event.description}</small>
+                <small>{result.randomEvent.choiceResultMessage ?? result.randomEvent.event.description}</small>
+                {result.randomEvent.choiceLabel && <small>選択：{result.randomEvent.choiceLabel}</small>}
                 <EffectChips items={randomEffects} />
               </p>
             ) : (
@@ -185,6 +192,7 @@ export const ResultModal = ({ result, onClose }: ResultModalProps) => {
 
         <p className="result-continue-hint">画面をクリックして次の月へ</p>
       </section>
+      {isClosing && <MonthTransition transition={transition} />}
     </div>
   );
 };

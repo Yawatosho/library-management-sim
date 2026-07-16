@@ -69,7 +69,13 @@ export type RandomEventId =
   | "system_down"
   | "complaint"
   | "staff_absence"
-  | "wet_books";
+  | "wet_books"
+  | "budget_return_request"
+  | "extended_hours_request"
+  | "special_collection_offer"
+  | "research_data_request"
+  | "learning_space_conflict"
+  | "system_upgrade_offer";
 
 export type AssistantExpression =
   | "normal"
@@ -119,8 +125,52 @@ export interface RandomEvent {
   id: RandomEventId;
   title: string;
   description: string;
-  tone: "good" | "bad";
+  tone: "good" | "bad" | "choice";
   effects: Partial<Record<StatKey, number>>;
+  imageId?: string;
+  choices?: RandomEventChoice[];
+}
+
+export interface RandomEventChoice {
+  id: string;
+  label: string;
+  description: string;
+  resultMessage: string;
+  effects: Partial<Record<StatKey, number>>;
+}
+
+export interface AnnualObjectiveCondition {
+  key: StatKey;
+  target: number;
+  comparison: "atLeast" | "atMost";
+  label: string;
+}
+
+export interface AnnualObjective {
+  id: string;
+  year: number;
+  title: string;
+  description: string;
+  icon: string;
+  conditions: AnnualObjectiveCondition[];
+  reward: {
+    budgetBonus: number;
+    effects: Partial<Record<StatKey, number>>;
+  };
+  successMessage: string;
+  encouragementMessage: string;
+}
+
+export interface AnnualObjectiveConditionResult extends AnnualObjectiveCondition {
+  current: number;
+  completed: boolean;
+}
+
+export interface AnnualObjectiveResult {
+  objective: AnnualObjective;
+  conditions: AnnualObjectiveConditionResult[];
+  completedCount: number;
+  completed: boolean;
 }
 
 export interface LogEntry {
@@ -140,6 +190,9 @@ export interface AppliedCommandResult {
 export interface RandomEventResult {
   event: RandomEvent;
   effects: Partial<Record<StatKey, number>>;
+  choiceId?: string;
+  choiceLabel?: string;
+  choiceResultMessage?: string;
 }
 
 export interface TurnResult {
@@ -164,6 +217,7 @@ export interface YearEndResult {
   statChanges: Partial<Record<StatKey, number>>;
   statsAfter: Stats;
   comment: string;
+  annualObjective: AnnualObjectiveResult;
 }
 
 export interface EndingResult {
@@ -171,6 +225,7 @@ export interface EndingResult {
   rank: string;
   title: string;
   comment: string;
+  annualObjective?: AnnualObjectiveResult;
 }
 
 export interface GameOverResult {
