@@ -1,63 +1,52 @@
 # University Library Maker
 
-React + TypeScript + Viteで作った、大学図書館運営シミュレーションゲームです。
+![University Library Maker タイトルビジュアル](public/assets/images/title-key-visual.png)
 
-- 1ターン1か月、全36ターン
-- 毎月3APで重点方針とコマンドを選択
-- 季節イベント、ランダムイベント、年度末評価あり
-- セーブデータはブラウザの`localStorage`に保存
-- バックエンド、外部APIなし
+大学図書館の運営責任者となり、3年間の図書館づくりに挑むターン制育成シミュレーションゲームです。
 
-## ローカル起動
+## 今すぐ遊ぶ
 
-Node.js 22系以上を推奨します。
+### [ゲームを開く](https://yawatosho.github.io/library-management-sim/)
 
-```bash
-npm install
-npm run dev
-```
+PCとスマートフォンのブラウザで遊べます。ダウンロードは必要ありません。
 
-表示されたURLをブラウザで開きます。
+## ゲームについて
 
-## ビルド
+物語は1年目の4月から始まります。毎月与えられる3APで運営コマンドを選び、学生と教員の声に耳を傾けながら、あなたらしい大学図書館を育ててください。
 
-```bash
-npm run build
-```
+- **全36ターン**: 1ターンは1か月。3年目の3月に最終評価を迎えます。
+- **毎月3AP**: 図書購入、研究支援、広報、施設改善、DXなどから行動を選びます。
+- **6種類の重点方針**: その月の運営方針によって、コマンドの効果が変化します。
+- **年度重点課題**: 1年ごとの目標を達成すると、次年度の運営が有利になります。
+- **季節とイベント**: 月ごとの季節効果に加え、予期せぬ出来事や選択型イベントが運営を左右します。
+- **S〜Eの最終評価**: 3年間の成果によってエピローグが変化します。
 
-`dist/`が生成されます。
+## 運営のヒント
 
-## GitHub Pages公開
+1. 月の始めに季節効果と年度重点課題を確認しましょう。
+2. 重点方針と相性の良いコマンドを組み合わせると、より良い成果を期待できます。
+3. 予算だけでなく、職員の士気と疲労にも気を配ってください。
+4. すべてを一度に伸ばそうとせず、どんな図書館にしたいかを思い描いてみましょう。
 
-このリポジトリ名を`library-management-sim`とする想定で、`vite.config.ts`に以下を設定しています。
+進行役の「司書さん」が、月々の運営をそばでお手伝いします。初めての方も、まずは気になるコマンドから選んでみてください。
 
-```ts
-base: "/library-management-sim/",
-```
+## 思い出アルバム
 
-リポジトリ名を変える場合は、この`base`も合わせて変更してください。
+一度見たランダムイベントとエピローグは、タイトル画面の「思い出」から振り返れます。サウンドテストでは、ゲーム内のBGMも聴くことができます。
 
-GitHub Pagesでは、GitHub Actionsで`npm ci`、`npm run build`を実行し、生成された`dist/`を公開します。手動で公開する場合も、`dist/`配下をPagesの公開対象にしてください。
+## セーブについて
 
-## デバッグモード
+進行状況と思い出は、遊んでいるブラウザ内に保存されます。ブラウザのデータを削除したり、別の端末やブラウザを使ったりした場合、セーブデータは引き継がれません。
 
-通常のタイトル画面ではデバッグモードの入口は表示されません。確認時だけURLへ`?debug=1`を付けてアクセスしてください。
+## Credits
 
-```text
-https://<ユーザー名>.github.io/library-management-sim/?debug=1
-```
+- Illustration: ChatGPT
+- Programming: ChatGPT
+- Music: Suno
+- Sound Effect: 効果音ラボ
+- Special Thanks: 図書館を愛する皆様
+- Produce: やわらか図書館学
 
-## Google Analytics
+---
 
-公開環境ではGoogle Analytics 4（測定ID: `G-J6NS8CCNWN`）を読み込み、各ゲーム画面の表示を仮想ページビューとして計測します。`localhost`と`127.0.0.1`では計測されません。
-
-## 画像アセット
-
-司書さん画像はなくても動きます。後から追加する場合は、以下のファイル名で`public/assets/images/`に置いてください。
-
-- `librarian_normal.png`
-- `librarian_smile.png`
-- `librarian_worried.png`
-- `librarian_surprised.png`
-- `librarian_explain.png`
-- `librarian_cheer.png`
+**Thank you for playing.**
