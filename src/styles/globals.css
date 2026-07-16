@@ -2568,14 +2568,13 @@ p {
 
 .help-game-layout {
   display: grid;
-  grid-template-columns: minmax(190px, 230px) minmax(520px, 1fr) minmax(230px, 310px);
+  grid-template-columns: minmax(620px, 1fr) minmax(260px, 340px);
   gap: 12px;
   width: min(1540px, 100%);
   min-height: 0;
   margin: 0 auto;
 }
 
-.help-chapter-nav,
 .help-manual,
 .help-librarian {
   min-height: 0;
@@ -2584,40 +2583,6 @@ p {
   box-shadow: 0 18px 40px rgba(13, 35, 31, 0.22), inset 0 1px rgba(255, 248, 214, 0.16);
   backdrop-filter: blur(14px) saturate(1.1);
 }
-
-.help-chapter-nav {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 10px;
-  background: rgba(14, 39, 35, 0.78);
-}
-
-.help-chapter-nav__heading {
-  display: grid;
-  gap: 2px;
-  border-bottom: 1px solid rgba(232, 198, 117, 0.28);
-  padding: 4px 5px 12px;
-}
-.help-chapter-nav__heading span { color: #f0cf78; font-size: 0.8rem; font-weight: 900; }
-.help-chapter-nav__heading strong { font-size: 1rem; }
-
-.help-chapter-nav a {
-  display: grid;
-  grid-template-columns: 24px 28px minmax(0, 1fr);
-  gap: 5px;
-  align-items: center;
-  min-height: 52px;
-  border-bottom: 1px solid rgba(255, 248, 214, 0.1);
-  padding: 6px 4px;
-  color: var(--help-ink);
-  text-decoration: none;
-  transition: color 150ms ease, background 150ms ease, padding 150ms ease;
-}
-.help-chapter-nav a:hover { padding-left: 8px; color: #ffe59b; background: rgba(255, 229, 155, 0.08); }
-.help-chapter-nav a small { color: rgba(240, 207, 120, 0.72); font-family: Georgia, serif; font-size: 0.8rem; }
-.help-chapter-nav a .material-symbols-rounded { color: #f0cf78; font-size: 1.15rem; }
-.help-chapter-nav a strong { overflow-wrap: anywhere; font-size: 0.8rem; line-height: 1.25; }
 
 .help-manual {
   display: grid;
@@ -2678,7 +2643,11 @@ p {
   padding: 10px 8px;
 }
 .help-manual__chapters article:nth-child(odd) { border-right: 1px solid rgba(45, 88, 73, 0.16); }
-.help-manual__chapters article:nth-last-child(-n + 2) { border-bottom: 0; }
+.help-manual__chapters article:last-child {
+  grid-column: 1 / -1;
+  border-right: 0;
+  border-bottom: 0;
+}
 .help-manual__chapter-icon {
   position: relative;
   display: grid;
@@ -2772,9 +2741,8 @@ p {
 .help-librarian__message p { color: var(--help-muted); font-family: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", sans-serif; font-size: 0.8rem; line-height: 1.7; }
 
 @media (max-width: 1050px) {
-  .help-game-layout { grid-template-columns: 160px minmax(500px, 1fr) 220px; }
+  .help-game-layout { grid-template-columns: minmax(540px, 1fr) 240px; }
   .help-librarian > img { width: 150%; }
-  .help-chapter-nav a { grid-template-columns: 20px 24px minmax(0, 1fr); }
 }
 
 @media (max-width: 820px) {
@@ -2783,15 +2751,10 @@ p {
   .help-game-header__title { display: none; }
   .help-game-header button { min-width: 82px; }
   .help-game-layout { display: flex; flex-direction: column; }
-  .help-chapter-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); order: 2; }
-  .help-chapter-nav__heading { grid-column: 1 / -1; }
-  .help-chapter-nav a { grid-template-columns: 22px minmax(0, 1fr); min-height: 46px; }
-  .help-chapter-nav a small { display: none; }
-  .help-chapter-nav a strong { font-size: 0.8rem; }
   .help-manual { order: 1; overflow: visible; }
   .help-manual__chapters { grid-template-columns: 1fr; }
   .help-manual__chapters article:nth-child(odd) { border-right: 0; }
-  .help-manual__chapters article:nth-last-child(2) { border-bottom: 1px solid rgba(45, 88, 73, 0.16); }
+  .help-manual__chapters article:last-child { grid-column: auto; }
   .help-librarian { order: 3; min-height: 480px; }
   .help-librarian > img { bottom: -22%; width: min(100%, 420px); height: 118%; }
 }
@@ -2810,7 +2773,6 @@ p {
   .help-manual__chapters { padding: 4px 8px; }
   .help-manual__chapters article { grid-template-columns: 38px minmax(0, 1fr); padding: 10px 4px; }
   .help-manual__tip { align-items: flex-start; }
-  .help-chapter-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .help-librarian { min-height: 420px; }
 }
 

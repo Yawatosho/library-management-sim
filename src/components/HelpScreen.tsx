@@ -10,49 +10,49 @@ const helpChapters = [
     number: "01",
     icon: "calendar_month",
     title: "毎月の運営",
-    text: "1ターンは1か月、全36ターン。毎月3APを使い、重点方針とコマンドを組み合わせます。",
+    text: "新年度の4月から、3年間の運営が始まります。毎月の3APをどの取り組みに使うか、重点方針と一緒に考えていきましょう。",
   },
   {
     id: "objective",
     number: "02",
     icon: "assignment_turned_in",
     title: "年度重点課題",
-    text: "年度ごとに3つの達成条件があります。メイン画面の重点課題ボードで進捗を確認でき、全条件達成で年度末ボーナスを獲得します。",
+    text: "大学からは、その年に期待される3つの目標が示されます。すべてを果たせば、翌年度の予算にもうれしい支援が加わります。",
   },
   {
     id: "score",
     number: "03",
     icon: "military_tech",
     title: "最終評価",
-    text: "3年目3月の終了時に、職員士気・職員疲労を除く育成成果を評価。各項目は120を満点水準として100点換算され、伸び残した3項目も重視されます。ランクはS:90以上、A:82以上、B:76以上、C:70以上、D:64以上、E:63以下です。",
+    text: "3年目の3月を終えると、これまで育てた図書館の姿がSからEのランクで評価されます。得意分野だけでなく、まだ手が届いていない分野にも目を配ることが大切です。",
   },
   {
     id: "game-over",
     number: "04",
     icon: "warning",
-    title: "運営停止条件",
-    text: "予算-20以下、疲労100、評判・学生満足度・教員信頼のいずれかが0でゲームオーバーです。",
+    title: "運営を続けるために",
+    text: "予算が-20以下、職員疲労が100、または評判・学生満足度・教員信頼のどれかが0になると、運営を続けられなくなります。苦しいときこそ、早めに立て直しましょう。",
   },
   {
     id: "year-end",
     number: "05",
     icon: "account_balance",
     title: "年度末評価",
-    text: "毎年3月に次年度予算を決定。執行部信頼、評判、学生満足度、教員信頼が予算を左右します。",
+    text: "毎年3月には、1年間の歩みが学内で振り返られます。執行部と教員からの信頼、学生の満足、図書館の評判が、次年度の予算につながります。",
   },
   {
     id: "morale",
     number: "06",
     icon: "volunteer_activism",
     title: "職員士気",
-    text: "士気70以上で成果が伸び、疲労負担も軽減。44以下では成果が落ち、疲労が増えます。",
+    text: "職員は、図書館を一緒に支える大切な仲間です。士気が70以上なら取り組みも実りやすく、疲労も抑えられます。44以下になったら、一度立ち止まることも大切です。",
   },
   {
     id: "growth",
     number: "07",
     icon: "monitoring",
-    title: "100を超える育成",
-    text: "育成パラメータに上限はありません。高水準でもコマンド効果は変わらないため、得意分野を気持ちよく伸ばし続けられます。",
+    title: "100を超えた先へ",
+    text: "蔵書も研究支援も、より良い図書館を目指す歩みに終わりはありません。各分野は100を超えても伸び続けます。あなたらしい強みを、どうぞ大切に育ててください。",
   },
 ] as const;
 
@@ -68,11 +68,11 @@ export const HelpScreen = ({ onBack }: HelpScreenProps) => {
           <span className="material-symbols-rounded" aria-hidden="true">local_library</span>
           <div>
             <strong>UNIVERSITY LIBRARY MAKER</strong>
-            <small>OPERATIONS HANDBOOK</small>
+            <small>DIRECTOR'S REFERENCE</small>
           </div>
         </div>
         <div className="help-game-header__title">
-          <span>運営資料</span>
+          <span>図書館長室資料</span>
           <strong>遊び方</strong>
         </div>
         <button type="button" onClick={onBack} aria-label="前の画面へ戻る">
@@ -82,34 +82,20 @@ export const HelpScreen = ({ onBack }: HelpScreenProps) => {
       </header>
 
       <main className="help-game-layout">
-        <nav className="help-chapter-nav" aria-label="遊び方の目次">
-          <div className="help-chapter-nav__heading">
-            <span>CONTENTS</span>
-            <strong>運営の手引き</strong>
-          </div>
-          {helpChapters.map((chapter) => (
-            <a key={chapter.id} href={`#help-${chapter.id}`}>
-              <small>{chapter.number}</small>
-              <span className="material-symbols-rounded" aria-hidden="true">{chapter.icon}</span>
-              <strong>{chapter.title}</strong>
-            </a>
-          ))}
-        </nav>
-
         <section className="help-manual" aria-labelledby="help-heading">
           <header className="help-manual__heading">
             <div>
-              <p>LIBRARY OPERATIONS / BASIC GUIDE</p>
-              <h1 id="help-heading">3年間の運営を始める前に</h1>
+              <p>A LETTER FOR OUR NEXT THREE YEARS</p>
+              <h1 id="help-heading">司書さんと歩む、これからの3年間</h1>
             </div>
             <span className="material-symbols-rounded" aria-hidden="true">menu_book</span>
           </header>
 
           <div className="help-keyfacts" aria-label="ゲームの基本情報">
-            <div><small>期間</small><strong>36</strong><span>か月</span></div>
-            <div><small>毎月</small><strong>3</strong><span>AP</span></div>
-            <div><small>開始</small><strong>1年目</strong><span>4月</span></div>
-            <div><small>最高評価</small><strong>S</strong><span>90点〜</span></div>
+            <div><small>任期</small><strong>36</strong><span>か月</span></div>
+            <div><small>ひと月の行動</small><strong>3</strong><span>AP</span></div>
+            <div><small>着任</small><strong>1年目</strong><span>4月</span></div>
+            <div><small>目指す未来</small><strong>S</strong><span>ランク</span></div>
           </div>
 
           <div className="help-manual__chapters">
@@ -129,7 +115,7 @@ export const HelpScreen = ({ onBack }: HelpScreenProps) => {
 
           <footer className="help-manual__tip">
             <span className="material-symbols-rounded" aria-hidden="true">lightbulb</span>
-            <p><strong>運営のコツ</strong> 高い数値をさらに伸ばすより、弱点を補いながら全体を整えると評価が安定します。</p>
+            <p><strong>司書さんから</strong> 得意なところを伸ばしつつ、まだ手の届いていないところにも少しずつ光を当てていきましょう。</p>
           </footer>
         </section>
 
@@ -141,7 +127,7 @@ export const HelpScreen = ({ onBack }: HelpScreenProps) => {
           <img src={librarianUrl} alt="運営を案内する司書さん" />
           <div className="help-librarian__message">
             <span>司書さん</span>
-            <p>全部を一度に覚えなくても大丈夫です。まずは今月の様子を見ながら、3APの使い方を私と一緒に考えてみましょう。</p>
+            <p>これから3年間、そばでお手伝いしますね。すべてをすぐに覚えなくても大丈夫です。まずは今月の図書館の様子から、一緒に見ていきましょう。</p>
           </div>
         </aside>
       </main>
