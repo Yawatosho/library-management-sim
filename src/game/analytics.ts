@@ -5,7 +5,7 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 declare global {
   interface Window {
-    dataLayer?: unknown[][];
+    dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
   }
 }
@@ -27,8 +27,8 @@ export const initializeAnalytics = () => {
   if (!analyticsEnabled() || window.gtag) return;
 
   window.dataLayer = window.dataLayer ?? [];
-  window.gtag = (...args: unknown[]) => {
-    window.dataLayer?.push(args);
+  window.gtag = function gtag() {
+    window.dataLayer?.push(arguments);
   };
 
   const script = document.createElement("script");
@@ -50,11 +50,13 @@ export const trackScreenView = (screen: Screen) => {
   const pageTitle = `${screenLabels[screen]} | University Library Maker`;
 
   window.gtag("event", "page_view", {
+    send_to: GA_MEASUREMENT_ID,
     page_title: pageTitle,
     page_location: `${window.location.origin}${pagePath}`,
     page_path: pagePath,
   });
   window.gtag("event", "screen_view", {
+    send_to: GA_MEASUREMENT_ID,
     app_name: "University Library Maker",
     screen_name: screen,
   });
