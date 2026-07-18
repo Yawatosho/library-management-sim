@@ -5,7 +5,7 @@ import { evaluateAnnualObjective } from "../game/annualObjectives";
 import { initialStats } from "../game/initialState";
 import type { StatKey, YearEndResult } from "../game/types";
 import { playSoundEffect } from "../game/soundEffects";
-import { MonthTransition } from "./MonthTransition";
+import { getMonthTransitionDuration, MonthTransition } from "./MonthTransition";
 import { AnnualObjectiveResultPanel } from "./AnnualObjectiveResultPanel";
 
 interface YearEndScreenProps {
@@ -87,13 +87,12 @@ export const YearEndScreen = ({ result, onContinue }: YearEndScreenProps) => {
   const continueWithMonthTransition = () => {
     if (isMonthTransitioning) return;
 
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     playSoundEffect("calendar_advance");
     setIsMonthTransitioning(true);
     monthTransitionTimerRef.current = window.setTimeout(() => {
       monthTransitionTimerRef.current = null;
       onContinue();
-    }, reduceMotion ? 40 : 1540);
+    }, getMonthTransitionDuration());
   };
 
   return (

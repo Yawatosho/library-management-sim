@@ -6,11 +6,12 @@ import {
   warningMessages,
 } from "../data/assistantMessages";
 import { commandById } from "../data/commands";
+import { rollMilestoneEvent } from "../data/milestoneEvents";
 import { policyById } from "../data/policies";
 import { createInitialState } from "./initialState";
 import { getYearMonth } from "./calculations";
 import { resolveRandomEventChoice, resolveTurn } from "./eventResolver";
-import type { CommandId, DebugRandomEventMode, GameState, LogEntry, PolicyId, RandomEventId, Screen, Stats } from "./types";
+import type { CommandId, DebugRandomEventMode, GameState, LogEntry, MilestoneEventId, PolicyId, RandomEventId, Screen, Stats } from "./types";
 
 export type GameAction =
   | { type: "NEW_GAME" }
@@ -25,10 +26,12 @@ export type GameAction =
   | { type: "CLEAR_COMMANDS" }
   | { type: "EXECUTE_TURN" }
   | { type: "RESOLVE_RANDOM_EVENT_CHOICE"; choiceId: string }
+  | { type: "DISMISS_MILESTONE_EVENT" }
   | { type: "DISMISS_RESULT" }
   | { type: "CONTINUE_AFTER_YEAR_END" }
   | { type: "DELETE_SAVE" }
-  | { type: "START_DEBUG_GAME"; turn: number; stats: Stats; randomEventMode: DebugRandomEventMode; randomEventId: RandomEventId };
+  | { type: "IMPORT_SAVE"; state: GameState }
+  | { type: "START_DEBUG_GAME"; turn: number; stats: Stats; randomEventMode: DebugRandomEventMode; randomEventId: RandomEventId; milestoneEventId: MilestoneEventId | null };
 
 const withTimestamp = (state: GameState): GameState => ({
   ...state,
@@ -53,6 +56,21 @@ const resetMonthSelection = (state: GameState): GameState => {
       expression: "normal",
       message: getMonthMessage(month, state.turn),
     },
+  };
+};
+
+const queueMilestoneEvent = (state: GameState): GameState => {
+  const seenEventIds = state.seenMilestoneEventIds ?? [];
+  const eventId = state.debugMilestoneEventId ?? rollMilestoneEvent(state.stats, seenEventIds);
+  if (!eventId) {
+    return state;
+  }
+
+  return {
+    ...state,
+    debugMilestoneEventId: undefined,
+    pendingMilestoneEventId: eventId,
+    seenMilestoneEventIds: [...seenEventIds, eventId],
   };
 };
 
@@ -127,6 +145,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         yearStartStats: { ...action.stats },
         debugRandomEventMode: action.randomEventMode,
         debugRandomEventId: action.randomEventId,
+        debugMilestoneEventId: action.milestoneEventId ?? undefined,
         assistant: {
           expression: "explain",
           message: `デバッグモードで${year}年目${month}月を開始します。`,
@@ -157,12 +176,22 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       });
     }
 
+    case "IMPORT_SAVE": {
+      const returnsToIntro = action.state.screen === "intro"
+        || (action.state.screen === "title" && action.state.previousScreen === "intro");
+
+      return withTimestamp({
+        ...action.state,
+        screen: "title",
+        previousScreen: returnsToIntro ? "intro" : null,
+      });
+    }
+
     case "GO_TITLE":
       return withTimestamp({
         ...state,
         screen: "title",
         previousScreen: state.screen === "intro" ? "intro" : null,
-        lastResult: null,
         assistant: {
           expression: "normal",
           message: "タイトルに戻りました。いつでも続きから、ご一緒できますよ。",
@@ -337,6 +366,12 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       });
     }
 
+    case "DISMISS_MILESTONE_EVENT":
+      return withTimestamp({
+        ...state,
+        pendingMilestoneEventId: null,
+      });
+
     case "DISMISS_RESULT": {
       if (state.gameOver) {
         return withTimestamp(setScreen({ ...state, lastResult: null }, "gameOver"));
@@ -358,7 +393,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         ...state,
         turn: Math.min(36, state.turn + 1),
       });
-      return withTimestamp(advanced);
+      return withTimestamp(queueMilestoneEvent(advanced));
     }
 
     case "CONTINUE_AFTER_YEAR_END": {
@@ -371,13 +406,13 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         yearStartStats: nextYearStartStats,
         turn: Math.min(36, state.turn + 1),
       });
-      return withTimestamp({
+      return withTimestamp(queueMilestoneEvent({
         ...advanced,
         assistant: {
           expression: "cheer",
           message: "新年度ですね。新しい予算で、また一緒に図書館を育てていきましょう。",
         },
-      });
+      }));
     }
 
     case "DELETE_SAVE":

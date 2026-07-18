@@ -198,7 +198,7 @@ export const MemoryAlbum = ({ onBack }: MemoryAlbumProps) => {
         <section className={activeTab === "sounds" ? "sound-test" : `memory-album-grid memory-album-grid--${activeTab}`} aria-live="polite">
           {activeTab === "events" && randomEvents.map((event, index) => {
             const unlocked = unlockedEvents.has(event.id);
-            const imageUrl = `${import.meta.env.BASE_URL}assets/images/random-events/${event.imageId ?? event.id}.png`;
+            const imageUrl = `${import.meta.env.BASE_URL}assets/images/random-events/thumbnails/${event.imageId ?? event.id}.jpg`;
             return (
               <button
                 type="button"
@@ -209,7 +209,9 @@ export const MemoryAlbum = ({ onBack }: MemoryAlbumProps) => {
                 aria-label={unlocked ? event.title : `未解放のランダムイベント ${index + 1}`}
               >
                 <span className="memory-card__image">
-                  <img src={imageUrl} alt="" />
+                  {unlocked
+                    ? <img src={imageUrl} alt="" loading="lazy" decoding="async" />
+                    : <span className="memory-card__placeholder" aria-hidden="true" />}
                   {!unlocked && <span className="material-symbols-rounded memory-card__lock" aria-hidden="true">lock</span>}
                 </span>
                 <span className="memory-card__copy">
@@ -222,7 +224,7 @@ export const MemoryAlbum = ({ onBack }: MemoryAlbumProps) => {
 
           {activeTab === "endings" && endings.map((ending) => {
             const unlocked = unlockedEndings.has(ending.rank);
-            const imageUrl = `${import.meta.env.BASE_URL}assets/images/endings/rank-${ending.rank.toLowerCase()}.png`;
+            const imageUrl = `${import.meta.env.BASE_URL}assets/images/endings/thumbnails/rank-${ending.rank.toLowerCase()}.jpg`;
             return (
               <button
                 type="button"
@@ -233,7 +235,9 @@ export const MemoryAlbum = ({ onBack }: MemoryAlbumProps) => {
                 aria-label={unlocked ? `${ending.rank}ランク ${ending.title}` : "未解放のエピローグ"}
               >
                 <span className="memory-card__image">
-                  <img src={imageUrl} alt="" />
+                  {unlocked
+                    ? <img src={imageUrl} alt="" loading="lazy" decoding="async" />
+                    : <span className="memory-card__placeholder" aria-hidden="true" />}
                   {!unlocked && <span className="material-symbols-rounded memory-card__lock" aria-hidden="true">lock</span>}
                   {unlocked && <span className="memory-card__rank">RANK {ending.rank}</span>}
                 </span>

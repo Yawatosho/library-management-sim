@@ -48,12 +48,21 @@ export const loadMemoryCollection = (): MemoryCollection => {
   }
 };
 
-const saveMemoryCollection = (collection: MemoryCollection) => {
+const sanitizeMemoryCollection = (collection: Partial<MemoryCollection>): MemoryCollection => ({
+  randomEventIds: Array.isArray(collection.randomEventIds)
+    ? [...new Set(collection.randomEventIds.filter(isRandomEventId))]
+    : [],
+  endingRanks: Array.isArray(collection.endingRanks)
+    ? [...new Set(collection.endingRanks.filter(isEndingRank))]
+    : [],
+});
+
+export const saveMemoryCollection = (collection: Partial<MemoryCollection>) => {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(collection));
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizeMemoryCollection(collection)));
 };
 
 export const unlockRandomEventMemory = (eventId: RandomEventId) => {

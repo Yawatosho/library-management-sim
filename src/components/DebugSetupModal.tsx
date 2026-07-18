@@ -1,15 +1,17 @@
 import { useState } from "react";
+import { milestoneEvents } from "../data/milestoneEvents";
 import { randomEvents } from "../data/randomEvents";
 import { initialStats } from "../game/initialState";
 import { calculateEnding, formatEffect, statKeys, statLabels } from "../game/calculations";
 import { RANDOM_EVENT_RATE } from "../game/eventResolver";
-import type { DebugRandomEventMode, RandomEventId, Stats } from "../game/types";
+import type { DebugRandomEventMode, MilestoneEventId, RandomEventId, Stats } from "../game/types";
 
 export interface DebugGameConfig {
   turn: number;
   stats: Stats;
   randomEventMode: DebugRandomEventMode;
   randomEventId: RandomEventId;
+  milestoneEventId: MilestoneEventId | null;
 }
 
 interface DebugSetupModalProps {
@@ -24,12 +26,12 @@ const dates = Array.from({ length: 36 }, (_, index) => {
 });
 
 const rankPresets = [
-  { rank: "S", score: 114, label: "伝説" },
-  { rank: "A", score: 103, label: "信頼" },
-  { rank: "B", score: 95, label: "堅実" },
-  { rank: "C", score: 88, label: "継続" },
-  { rank: "D", score: 80, label: "要改革" },
-  { rank: "E", score: 66, label: "危機" },
+  { rank: "S", statValue: 120, label: "伝説" },
+  { rank: "A", statValue: 114, label: "信頼" },
+  { rank: "B", statValue: 104, label: "堅実" },
+  { rank: "C", statValue: 96, label: "継続" },
+  { rank: "D", statValue: 88, label: "要改革" },
+  { rank: "E", statValue: 80, label: "危機" },
 ] as const;
 
 const createRankPresetStats = (score: number): Stats => ({
@@ -60,6 +62,7 @@ export const DebugSetupModal = ({ onClose, onStart }: DebugSetupModalProps) => {
   const [stats, setStats] = useState<Stats>({ ...initialStats });
   const [randomEventMode, setRandomEventMode] = useState<DebugRandomEventMode>("normal");
   const [randomEventId, setRandomEventId] = useState<RandomEventId>(randomEvents[0]!.id);
+  const [milestoneEventId, setMilestoneEventId] = useState<MilestoneEventId | null>(null);
   const selectedRandomEvent = randomEvents.find((event) => event.id === randomEventId) ?? randomEvents[0]!;
   const previewEnding = calculateEnding(stats);
 
@@ -72,15 +75,30 @@ export const DebugSetupModal = ({ onClose, onStart }: DebugSetupModalProps) => {
     setStats((current) => ({ ...current, [key]: normalized }));
   };
 
-  const applyRankPreset = (score: number) => {
+  const applyRankPreset = (statValue: number) => {
     setTurn(36);
-    setStats(createRankPresetStats(score));
+    setStats(createRankPresetStats(statValue));
     setRandomEventMode("disable");
   };
 
   const applyGameOverPreset = (key: keyof Stats, value: number) => {
     setTurn(1);
     setStats({ ...initialStats, [key]: value });
+    setRandomEventMode("disable");
+  };
+
+  const selectMilestoneEvent = (eventId: MilestoneEventId | null) => {
+    setMilestoneEventId(eventId);
+    if (!eventId) return;
+
+    const event = milestoneEvents.find((item) => item.id === eventId);
+    if (!event) return;
+
+    setTurn((current) => Math.min(current, 35));
+    setStats((current) => ({
+      ...current,
+      [event.conditionKey]: Math.max(current[event.conditionKey], event.target),
+    }));
     setRandomEventMode("disable");
   };
 
@@ -114,11 +132,11 @@ export const DebugSetupModal = ({ onClose, onStart }: DebugSetupModalProps) => {
                 key={preset.rank}
                 type="button"
                 className={previewEnding.rank === preset.rank && turn === 36 && randomEventMode === "disable" ? "is-active" : ""}
-                onClick={() => applyRankPreset(preset.score)}
+                onClick={() => applyRankPreset(preset.statValue)}
               >
                 <strong>{preset.rank}</strong>
                 <span>{preset.label}</span>
-                <small>{preset.score}点</small>
+                <small>{calculateEnding(createRankPresetStats(preset.statValue)).score}点</small>
               </button>
             ))}
           </div>
@@ -135,6 +153,39 @@ export const DebugSetupModal = ({ onClose, onStart }: DebugSetupModalProps) => {
                 <span className="material-symbols-rounded" aria-hidden="true">{preset.icon}</span>
                 <strong>{preset.label}</strong>
                 <small>{preset.note}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="debug-section debug-milestone-section">
+          <div className="debug-section__heading">
+            <span>交流イベント確認</span>
+            <small>次のカレンダー表示後に発生</small>
+          </div>
+          <p>確認する人物を選び、メイン画面で1か月進めてください。</p>
+          <div className="debug-milestone-presets" aria-label="交流イベントのプリセット">
+            <button
+              type="button"
+              className={milestoneEventId === null ? "is-active" : ""}
+              onClick={() => selectMilestoneEvent(null)}
+            >
+              <span className="material-symbols-rounded" aria-hidden="true">casino</span>
+              <strong>通常抽選</strong>
+              <small>条件達成時40%</small>
+            </button>
+            {milestoneEvents.map((event) => (
+              <button
+                key={event.id}
+                type="button"
+                className={milestoneEventId === event.id ? "is-active" : ""}
+                onClick={() => selectMilestoneEvent(event.id)}
+              >
+                <span className="material-symbols-rounded" aria-hidden="true">
+                  {event.id === "faculty_thanks" ? "school" : "person_search"}
+                </span>
+                <strong>{event.speaker}</strong>
+                <small>{event.conditionKey === "facultyTrust" ? "教員信頼" : "学生満足度"}100以上</small>
               </button>
             ))}
           </div>
@@ -179,7 +230,7 @@ export const DebugSetupModal = ({ onClose, onStart }: DebugSetupModalProps) => {
           )}
         </fieldset>
 
-        <button type="button" className="primary-button debug-start" onClick={() => onStart({ turn, stats, randomEventMode, randomEventId })}>この設定で開始</button>
+        <button type="button" className="primary-button debug-start" onClick={() => onStart({ turn, stats, randomEventMode, randomEventId, milestoneEventId })}>この設定で開始</button>
       </section>
     </div>
   );

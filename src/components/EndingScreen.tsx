@@ -1,5 +1,5 @@
 import type { CSSProperties, KeyboardEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { randomEvents } from "../data/randomEvents";
 import { getStatMeterPercent, metricKeys, statLabels } from "../game/calculations";
 import { evaluateAnnualObjective } from "../game/annualObjectives";
@@ -45,6 +45,7 @@ export const EndingScreen = ({ ending, stats, onTitle }: EndingScreenProps) => {
   const [phase, setPhase] = useState<"report" | "epilogue" | "credits">("report");
   const [imageFailed, setImageFailed] = useState(false);
   const [creditsComplete, setCreditsComplete] = useState(false);
+  const creditsTimerRef = useRef<number | null>(null);
   const rank = ending.rank.toLowerCase();
   const backgroundUrl = `${import.meta.env.BASE_URL}assets/images/background.png`;
   const librarianUrl = `${import.meta.env.BASE_URL}assets/images/librarian.png`;
@@ -59,6 +60,24 @@ export const EndingScreen = ({ ending, stats, onTitle }: EndingScreenProps) => {
     }
     return images.slice(0, 6);
   }, []);
+
+  useEffect(() => {
+    if (phase !== "credits") return;
+
+    setCreditsComplete(false);
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    creditsTimerRef.current = window.setTimeout(() => {
+      creditsTimerRef.current = null;
+      setCreditsComplete(true);
+    }, reduceMotion ? 19000 : 32000);
+
+    return () => {
+      if (creditsTimerRef.current !== null) {
+        window.clearTimeout(creditsTimerRef.current);
+        creditsTimerRef.current = null;
+      }
+    };
+  }, [phase]);
 
   const handleCreditsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (creditsComplete && (event.key === "Enter" || event.key === " ")) {
@@ -102,8 +121,12 @@ export const EndingScreen = ({ ending, stats, onTitle }: EndingScreenProps) => {
           <small>STAFF ROLL</small>
         </header>
         <div className="ending-credits__roll">
-          {creditItems.map((item) => (
-            <section key={item.role} className="ending-credits__item">
+          {creditItems.map((item, index) => (
+            <section
+              key={item.role}
+              className="ending-credits__item"
+              style={{ "--credit-delay": `${index * 3.2}s` } as CSSProperties}
+            >
               <span>{item.role}</span>
               <strong>{item.name}</strong>
             </section>

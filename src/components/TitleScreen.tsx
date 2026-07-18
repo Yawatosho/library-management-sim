@@ -1,8 +1,10 @@
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MemoryAlbum } from "./MemoryAlbum";
+import { SaveDataModal } from "./SaveDataModal";
 import { BgmPreferenceButton } from "./SeasonalBgm";
 import { DebugSetupModal, type DebugGameConfig } from "./DebugSetupModal";
+import type { GameSaveBackup } from "../game/storage";
 
 interface TitleScreenProps {
   canContinue: boolean;
@@ -10,8 +12,66 @@ interface TitleScreenProps {
   onContinue: () => void;
   onHelp: () => void;
   onDeleteSave: () => void;
+  onExportSave: () => Promise<void>;
+  onImportSave: (backup: GameSaveBackup) => void;
   onStartDebug: (config: DebugGameConfig) => void;
 }
+
+type ConfirmAction = "new-game" | "delete-save";
+
+interface TitleConfirmDialogProps {
+  action: ConfirmAction;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+const TitleConfirmDialog = ({ action, onCancel, onConfirm }: TitleConfirmDialogProps) => {
+  const isDelete = action === "delete-save";
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel]);
+
+  return (
+    <div className="modal-backdrop title-confirm-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
+    }}>
+      <section
+        className={`modal title-confirm-modal ${isDelete ? "title-confirm-modal--danger" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="title-confirm-heading"
+        aria-describedby="title-confirm-description"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <span className="material-symbols-rounded title-confirm-modal__icon" aria-hidden="true">
+          {isDelete ? "delete_forever" : "auto_stories"}
+        </span>
+        <div className="title-confirm-modal__copy">
+          <small>{isDelete ? "DELETE SAVE DATA" : "START NEW STORY"}</small>
+          <h2 id="title-confirm-heading">
+            {isDelete ? "現在の運営記録を削除しますか？" : "新しい3年間を始めますか？"}
+          </h2>
+          <p id="title-confirm-description">
+            {isDelete
+              ? "続きから再開するための記録は失われます。思い出アルバムの記録は残ります。"
+              : "現在の運営記録は、新しいゲームの開始時に上書きされます。"}
+          </p>
+        </div>
+        <div className="title-confirm-modal__actions">
+          <button type="button" className="title-confirm-modal__cancel" onClick={onCancel}>戻る</button>
+          <button type="button" className="title-confirm-modal__confirm" onClick={onConfirm}>
+            {isDelete ? "削除する" : "はじめから遊ぶ"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+};
 
 export const TitleScreen = ({
   canContinue,
@@ -19,10 +79,14 @@ export const TitleScreen = ({
   onContinue,
   onHelp,
   onDeleteSave,
+  onExportSave,
+  onImportSave,
   onStartDebug,
 }: TitleScreenProps) => {
   const [debugOpen, setDebugOpen] = useState(false);
   const [albumOpen, setAlbumOpen] = useState(false);
+  const [saveDataOpen, setSaveDataOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const debugEnabled = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1";
   const keyVisualUrl = `${import.meta.env.BASE_URL}assets/images/title-key-visual.png`;
   const style = { "--title-key-visual": `url(${keyVisualUrl})` } as CSSProperties;
@@ -55,7 +119,11 @@ export const TitleScreen = ({
           </p>
 
           <nav className="title-key-menu" aria-label="メインメニュー">
-            <button type="button" className="title-key-menu__primary" onClick={onNewGame}>
+            <button
+              type="button"
+              className="title-key-menu__primary"
+              onClick={() => canContinue ? setConfirmAction("new-game") : onNewGame()}
+            >
               <span className="material-symbols-rounded" aria-hidden="true">auto_stories</span>
               <span><strong>はじめから</strong><small>新しい3年間を始める</small></span>
               <span className="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
@@ -78,7 +146,8 @@ export const TitleScreen = ({
           </nav>
 
           <div className="title-key-submenu">
-            {canContinue && <button type="button" onClick={onDeleteSave}>セーブデータ削除</button>}
+            <button type="button" onClick={() => setSaveDataOpen(true)}>セーブデータ管理</button>
+            {canContinue && <button type="button" onClick={() => setConfirmAction("delete-save")}>セーブデータ削除</button>}
             {debugEnabled && <button type="button" onClick={() => setDebugOpen(true)}>デバッグモード</button>}
           </div>
         </section>
@@ -88,7 +157,27 @@ export const TitleScreen = ({
         <span>UNIVERSITY LIBRARY OPERATIONS OFFICE</span>
         <small>静かな一手が、大学の未来を変える。</small>
       </footer>
+      {saveDataOpen && (
+        <SaveDataModal
+          canExport={canContinue}
+          onClose={() => setSaveDataOpen(false)}
+          onExport={onExportSave}
+          onImport={onImportSave}
+        />
+      )}
       {debugEnabled && debugOpen && <DebugSetupModal onClose={() => setDebugOpen(false)} onStart={onStartDebug} />}
+      {confirmAction && (
+        <TitleConfirmDialog
+          action={confirmAction}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={() => {
+            const action = confirmAction;
+            setConfirmAction(null);
+            if (action === "delete-save") onDeleteSave();
+            else onNewGame();
+          }}
+        />
+      )}
     </div>
   );
 };

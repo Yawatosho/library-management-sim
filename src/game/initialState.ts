@@ -31,6 +31,8 @@ export const createInitialState = (screen: Screen = "title"): GameState => ({
   pendingYearEnd: null,
   ending: null,
   gameOver: null,
+  pendingMilestoneEventId: null,
+  seenMilestoneEventIds: [],
   assistant: {
     expression: "normal",
     message: titleMessage,

@@ -1,6 +1,7 @@
 import type { CSSProperties, Dispatch } from "react";
 import { useEffect, useRef, useState } from "react";
 import { commandById } from "../data/commands";
+import { milestoneEventById } from "../data/milestoneEvents";
 import { policyById } from "../data/policies";
 import { seasonalEventByMonth } from "../data/seasonalEvents";
 import { calculateAppliedCommand, finalEvaluationTarget, formatEffect, getYearMonth, statKeys } from "../game/calculations";
@@ -11,6 +12,7 @@ import { playSoundEffect } from "../game/soundEffects";
 import type { CommandId, GameState, StatKey } from "../game/types";
 import { CommandPanel } from "./CommandPanel";
 import { AnnualObjectiveBadge, AnnualObjectiveModal } from "./AnnualObjectivePanel";
+import { getMonthTransitionDuration } from "./MonthTransition";
 import { PolicyModal } from "./PolicyModal";
 import { ResultModal } from "./ResultModal";
 import { SeasonalBgm } from "./SeasonalBgm";
@@ -20,6 +22,8 @@ interface MainScreenProps {
   state: GameState;
   dispatch: Dispatch<GameAction>;
 }
+
+type MobileManagementPanel = "commands" | "stats";
 
 interface StatusPillProps {
   icon: string;
@@ -121,8 +125,14 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
   const [previewCommandId, setPreviewCommandId] = useState<CommandId | null>(null);
   const [viewedRandomEventKey, setViewedRandomEventKey] = useState<string | null>(null);
   const [isMonthTransitioning, setIsMonthTransitioning] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<MobileManagementPanel>("commands");
+  const [mobileActionPanelVisible, setMobileActionPanelVisible] = useState(false);
+  const [mobileCompactHudVisible, setMobileCompactHudVisible] = useState(false);
   const monthTransitionTimerRef = useRef<number | null>(null);
+  const mobileActionPanelRef = useRef<HTMLElement | null>(null);
+  const mobileStatusStripRef = useRef<HTMLElement | null>(null);
   const announcedResultKeyRef = useRef<string | null>(null);
+  const announcedMilestoneEventRef = useRef<string | null>(null);
   const { year, month } = getYearMonth(state.turn);
   const annualObjective = evaluateAnnualObjective(year, state.stats);
   const seasonalEvent = seasonalEventByMonth[month];
@@ -130,6 +140,10 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
   const seasonInfo = seasonMeta[season];
   const selectedPolicyName = state.selectedPolicyId ? policyById[state.selectedPolicyId].name : "方針を選択";
   const resultOpen = state.lastResult !== null;
+  const milestoneEvent = state.pendingMilestoneEventId
+    ? milestoneEventById[state.pendingMilestoneEventId]
+    : null;
+  const interactionLocked = resultOpen || milestoneEvent !== null;
   const randomEventKey = state.lastResult?.randomEvent
     ? `${state.lastResult.turn}:${state.lastResult.randomEvent.event.id}`
     : null;
@@ -181,6 +195,9 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
   const displayedLibrarianUrl = librarianExpressionImageFailed ? librarianFallbackUrl : librarianUrl;
   const randomEventImageUrl = activeRandomEvent
     ? `${import.meta.env.BASE_URL}assets/images/random-events/${activeRandomEvent.event.imageId ?? activeRandomEvent.event.id}.png`
+    : "";
+  const milestoneEventImageUrl = milestoneEvent
+    ? `${import.meta.env.BASE_URL}assets/images/${milestoneEvent.imageName}`
     : "";
   const screenStyle = {
     "--game-background": `url(${backgroundUrl})`,
@@ -244,6 +261,19 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
   }, [state.lastResult]);
 
   useEffect(() => {
+    if (!milestoneEvent || announcedMilestoneEventRef.current === milestoneEvent.id) return;
+    announcedMilestoneEventRef.current = milestoneEvent.id;
+    playSoundEffect("event");
+  }, [milestoneEvent]);
+
+  useEffect(() => {
+    if (!milestoneEvent) return;
+    setPolicyModalOpen(false);
+    setObjectiveModalOpen(false);
+    setPreviewCommandId(null);
+  }, [milestoneEvent]);
+
+  useEffect(() => {
     if (resultOpen) setObjectiveModalOpen(false);
   }, [resultOpen]);
 
@@ -253,17 +283,43 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
     }
   }, []);
 
+  useEffect(() => {
+    const hud = mobileStatusStripRef.current;
+    if (!hud || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setMobileCompactHudVisible(!(entry?.isIntersecting ?? true));
+    }, { threshold: 0.05 });
+    observer.observe(hud);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const panel = mobileActionPanelRef.current;
+    if (!panel) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      setMobileActionPanelVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setMobileActionPanelVisible(entry?.isIntersecting ?? false);
+    }, { threshold: 0.05 });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
+
   const dismissResultWithMonthTransition = () => {
     if (isMonthTransitioning || state.lastResult === null) return;
 
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     playSoundEffect("calendar_advance");
     setIsMonthTransitioning(true);
     monthTransitionTimerRef.current = window.setTimeout(() => {
       monthTransitionTimerRef.current = null;
       setIsMonthTransitioning(false);
       dispatch({ type: "DISMISS_RESULT" });
-    }, reduceMotion ? 40 : 1540);
+    }, getMonthTransitionDuration());
   };
 
   return (
@@ -289,14 +345,14 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
           </div>
         </div>
 
-        <section className="status-strip sim-hud" aria-label="運営状況">
+        <section ref={mobileStatusStripRef} className="status-strip sim-hud" aria-label="運営状況">
           <StatusPill
             icon="flag"
             label="重点方針"
             value={selectedPolicyName}
             className={`status-pill status-pill--wide ${state.selectedPolicyId ? "" : "status-pill--prompt"}`}
             onClick={() => setPolicyModalOpen(true)}
-            disabled={resultOpen}
+            disabled={interactionLocked}
           />
           <StatusPill
             icon="account_balance_wallet"
@@ -337,7 +393,7 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
           <AnnualObjectiveBadge
             result={annualObjective}
             onOpen={() => setObjectiveModalOpen(true)}
-            disabled={resultOpen}
+            disabled={interactionLocked}
             variant="topbar"
           />
           <div className="topbar__actions">
@@ -346,7 +402,12 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
               <span className="material-symbols-rounded" aria-hidden="true">menu_book</span>
               <span>ヘルプ</span>
             </button>
-            <button type="button" className="ghost-button sim-utility-button" onClick={() => dispatch({ type: "GO_TITLE" })}>
+            <button
+              type="button"
+              className="ghost-button sim-utility-button"
+              onClick={() => dispatch({ type: "GO_TITLE" })}
+              disabled={interactionLocked || isMonthTransitioning}
+            >
               <span className="material-symbols-rounded" aria-hidden="true">home</span>
               <span>タイトル</span>
             </button>
@@ -354,8 +415,32 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
         </div>
       </header>
 
+      {mobileCompactHudVisible && (
+        <section className="mobile-compact-hud" aria-label="運営状況の概要">
+          <button type="button" onClick={() => setPolicyModalOpen(true)} disabled={interactionLocked}>
+            <span className="material-symbols-rounded" aria-hidden="true">flag</span>
+            <span><small>方針</small><strong>{selectedPolicyName}</strong></span>
+          </button>
+          <div>
+            <span className="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
+            <span><small>予算</small><strong>{state.stats.budget}</strong></span>
+          </div>
+          <div className={state.stats.staffFatigue >= 80 ? "is-danger" : state.stats.staffFatigue >= 60 ? "is-warn" : ""}>
+            <span className="material-symbols-rounded" aria-hidden="true">battery_alert</span>
+            <span><small>疲労</small><strong>{state.stats.staffFatigue}</strong></span>
+          </div>
+          <div className={state.stats.staffMorale <= 20 ? "is-danger" : state.stats.staffMorale <= 40 ? "is-warn" : ""}>
+            <span className="material-symbols-rounded" aria-hidden="true">volunteer_activism</span>
+            <span><small>士気</small><strong>{state.stats.staffMorale}</strong></span>
+          </div>
+        </section>
+      )}
+
       <main className="sim-layout">
-        <aside className="sim-side sim-side--left">
+        <aside
+          ref={mobileActionPanelRef}
+          className={`sim-side sim-side--left ${mobilePanel === "commands" ? "is-mobile-active" : ""}`}
+        >
           <CommandPanel
             selectedCommandIds={state.selectedCommandIds}
             apRemaining={state.apRemaining}
@@ -370,7 +455,7 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
               dispatch({ type: "CLEAR_COMMANDS" });
             }}
             onPreviewChange={setPreviewCommandId}
-            disabled={resultOpen}
+            disabled={interactionLocked}
           />
         </aside>
 
@@ -412,6 +497,13 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
                 </div>
               )}
             </div>
+          ) : milestoneEvent ? (
+            <div
+              className={`sim-stage__guest sim-stage__guest--${milestoneEvent.tone}`}
+              aria-label={milestoneEvent.speaker}
+            >
+              <img src={milestoneEventImageUrl} alt={`${milestoneEvent.speaker}のお礼`} />
+            </div>
           ) : (
             <div className="sim-stage__character" aria-label="司書さん">
               {!librarianImageFailed ? (
@@ -435,7 +527,7 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
           )}
         </section>
 
-        <aside className="sim-side sim-side--right">
+        <aside className={`sim-side sim-side--right ${mobilePanel === "stats" ? "is-mobile-active" : ""}`}>
           <StatsPanel
             stats={state.stats}
             title="育成パラメータ"
@@ -448,10 +540,14 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
           className={`dialogue-window ${
             activeRandomEvent
               ? `dialogue-window--event dialogue-window--event-${activeRandomEvent.event.tone}`
+              : milestoneEvent
+                ? `dialogue-window--milestone dialogue-window--milestone-${milestoneEvent.tone}`
               : `dialogue-window--${state.assistant.expression}`
           }`}
         >
-          <div className="dialogue-window__name">{activeRandomEvent ? "ランダムイベント" : "司書さん"}</div>
+          <div className="dialogue-window__name">
+            {activeRandomEvent ? "ランダムイベント" : milestoneEvent?.speaker ?? "司書さん"}
+          </div>
           {activeRandomEvent ? (
             <div className={`dialogue-window__event-content ${activeRandomEventChoices ? "dialogue-window__event-content--choice" : ""}`}>
               <div className="dialogue-window__event-text">
@@ -501,11 +597,84 @@ export const MainScreen = ({ state, dispatch }: MainScreenProps) => {
                 </button>
               )}
             </div>
+          ) : milestoneEvent ? (
+            <div className="dialogue-window__event-content dialogue-window__milestone-content">
+              <div className="dialogue-window__event-text">
+                <span>{milestoneEvent.title}</span>
+                <p>{milestoneEvent.message}</p>
+              </div>
+              <button
+                type="button"
+                className="primary-button dialogue-window__event-button"
+                onClick={() => {
+                  playSoundEffect("ui_select");
+                  dispatch({ type: "DISMISS_MILESTONE_EVENT" });
+                }}
+              >
+                今月の運営へ
+              </button>
+            </div>
           ) : (
             <p>{state.assistant.message}</p>
           )}
         </footer>
+
+        <nav className="mobile-management-tabs" aria-label="運営画面の切り替え">
+          <button
+            type="button"
+            className={mobilePanel === "commands" ? "is-active" : ""}
+            onClick={() => setMobilePanel("commands")}
+            aria-pressed={mobilePanel === "commands"}
+          >
+            <span className="material-symbols-rounded" aria-hidden="true">touch_app</span>
+            <span><strong>行動</strong><small>{state.selectedCommandIds.length > 0 ? `${state.selectedCommandIds.length}件選択` : `残りAP ${state.apRemaining}`}</small></span>
+          </button>
+          <button
+            type="button"
+            className={mobilePanel === "stats" ? "is-active" : ""}
+            onClick={() => setMobilePanel("stats")}
+            aria-pressed={mobilePanel === "stats"}
+          >
+            <span className="material-symbols-rounded" aria-hidden="true">monitoring</span>
+            <span><strong>状況</strong><small>育成パラメータ</small></span>
+          </button>
+        </nav>
       </main>
+
+      {!interactionLocked && mobilePanel === "commands" && mobileActionPanelVisible && (
+        <div className="mobile-turn-dock" aria-label="今月の行動を決定">
+          <button
+            type="button"
+            className="mobile-turn-dock__clear"
+            onClick={() => {
+              playSoundEffect("ui_cancel");
+              dispatch({ type: "CLEAR_COMMANDS" });
+            }}
+            disabled={state.selectedCommandIds.length === 0}
+            aria-label="コマンドの選択を解除"
+            title="選択解除"
+          >
+            <span className="material-symbols-rounded" aria-hidden="true">deselect</span>
+          </button>
+          <div className="mobile-turn-dock__ap" aria-label={`残りAP ${state.apRemaining} / 3`}>
+            <small>残りAP</small>
+            <span>
+              {[0, 1, 2].map((index) => <i key={index} className={index < state.apRemaining ? "is-active" : ""} />)}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="mobile-turn-dock__execute"
+            onClick={() => dispatch({ type: "EXECUTE_TURN" })}
+            disabled={!state.selectedPolicyId}
+          >
+            <span className="material-symbols-rounded" aria-hidden="true">
+              {state.selectedCommandIds.length > 0 ? "play_arrow" : "event_available"}
+            </span>
+            {state.selectedCommandIds.length > 0 ? "コマンド実行" : "月を進める"}
+          </button>
+        </div>
+      )}
 
       {policyModalOpen && (
         <PolicyModal

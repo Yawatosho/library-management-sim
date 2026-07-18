@@ -10,6 +10,9 @@ interface MonthTransitionProps {
   transition: MonthTransitionData;
 }
 
+export const getMonthTransitionDuration = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 900 : 1540;
+
 export const MonthTransition = ({ transition }: MonthTransitionProps) => (
   <div className={`month-transition month-transition--${transition.season}`} aria-hidden="true">
     <div className="month-transition__light" />

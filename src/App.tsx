@@ -8,9 +8,9 @@ import { playScreenBgm, stopSeasonalBgm } from "./components/SeasonalBgm";
 import { TitleScreen } from "./components/TitleScreen";
 import { YearEndScreen } from "./components/YearEndScreen";
 import { trackScreenView } from "./game/analytics";
-import { unlockEndingMemory, unlockRandomEventMemory } from "./game/memoryCollection";
+import { saveMemoryCollection, unlockEndingMemory, unlockRandomEventMemory } from "./game/memoryCollection";
 import { gameReducer } from "./game/reducer";
-import { deleteGame, loadGame, saveGame } from "./game/storage";
+import { deleteGame, downloadGameSaveBackup, loadGame, saveGame, type GameSaveBackup } from "./game/storage";
 
 const isBlankTitleState = (screen: string, turn: number, logLength: number) =>
   screen === "title" && turn === 1 && logLength === 0;
@@ -55,6 +55,11 @@ export const App = () => {
   const handleDeleteSave = () => {
     deleteGame();
     dispatch({ type: "DELETE_SAVE" });
+  };
+
+  const handleImportSave = (backup: GameSaveBackup) => {
+    saveMemoryCollection(backup.memoryCollection);
+    dispatch({ type: "IMPORT_SAVE", state: backup.gameState });
   };
 
   if (state.screen === "help") {
@@ -114,6 +119,8 @@ export const App = () => {
       onContinue={() => dispatch({ type: "CONTINUE_GAME" })}
       onHelp={() => dispatch({ type: "OPEN_HELP" })}
       onDeleteSave={handleDeleteSave}
+      onExportSave={() => downloadGameSaveBackup(state)}
+      onImportSave={handleImportSave}
       onStartDebug={(config) => dispatch({ type: "START_DEBUG_GAME", ...config })}
     />
   );

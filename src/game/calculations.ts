@@ -379,6 +379,18 @@ const finalScoreKeys = [
   "reputation",
 ] as const satisfies readonly MetricKey[];
 
+const finalScoreWeights: Record<(typeof finalScoreKeys)[number], number> = {
+  collection: 0.1,
+  studentSatisfaction: 0.15,
+  facultyTrust: 0.15,
+  executiveTrust: 0.1,
+  publicity: 0.08,
+  facility: 0.08,
+  researchSupport: 0.1,
+  dx: 0.07,
+  reputation: 0.12,
+};
+
 export const finalEvaluationTarget = 120;
 
 export const getStatMeterPercent = (key: StatKey, value: number) => {
@@ -387,30 +399,29 @@ export const getStatMeterPercent = (key: StatKey, value: number) => {
 };
 
 const toEvaluationValue = (value: number) =>
-  Math.min(100, Math.max(0, value) / finalEvaluationTarget * 100);
+  Math.min(110, Math.max(0, value) / finalEvaluationTarget * 100);
 
 export const calculateScore = (stats: Stats) => {
-  const weightedScore =
-    toEvaluationValue(stats.collection) * 0.1 +
-    toEvaluationValue(stats.studentSatisfaction) * 0.15 +
-    toEvaluationValue(stats.facultyTrust) * 0.15 +
-    toEvaluationValue(stats.executiveTrust) * 0.1 +
-    toEvaluationValue(stats.publicity) * 0.08 +
-    toEvaluationValue(stats.facility) * 0.08 +
-    toEvaluationValue(stats.researchSupport) * 0.1 +
-    toEvaluationValue(stats.dx) * 0.07 +
-    toEvaluationValue(stats.reputation) * 0.12;
-
-  const outcomeScore = weightedScore / 0.95;
-  const lowerThreeAverage = finalScoreKeys
-    .map((key) => toEvaluationValue(stats[key]))
+  const evaluationValues = finalScoreKeys.map((key) => ({
+    key,
+    value: toEvaluationValue(stats[key]),
+  }));
+  const outcomeScore = evaluationValues.reduce(
+    (total, item) => total + item.value * finalScoreWeights[item.key],
+    0,
+  ) / 0.95;
+  const lowerThreeAverage = evaluationValues
+    .map((item) => item.value)
     .sort((a, b) => a - b)
     .slice(0, 3)
     .reduce((total, value) => total + value, 0) / 3;
+  const completedTargetRatio = finalScoreKeys.filter(
+    (key) => stats[key] >= finalEvaluationTarget,
+  ).length / finalScoreKeys.length * 100;
 
-  // A strong final evaluation requires both overall results and attention to weak areas.
-  const score = outcomeScore * 0.7 + lowerThreeAverage * 0.3;
-  return Math.round(score * 10) / 10;
+  // Reaching the top rank requires broad results, care for weak areas, and completed fields.
+  const score = outcomeScore * 0.65 + lowerThreeAverage * 0.25 + completedTargetRatio * 0.1;
+  return Math.round(Math.min(100, score) * 10) / 10;
 };
 
 export const calculateEnding = (stats: Stats, annualObjective?: AnnualObjectiveResult) => ({

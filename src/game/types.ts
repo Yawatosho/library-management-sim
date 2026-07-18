@@ -27,6 +27,8 @@ export type Stats = Record<StatKey, number>;
 
 export type DebugRandomEventMode = "normal" | "force" | "disable";
 
+export type MilestoneEventId = "faculty_thanks" | "student_thanks";
+
 export type PolicyId =
   | "student_first"
   | "research_focus"
@@ -254,7 +256,10 @@ export interface GameState {
   ending: EndingResult | null;
   gameOver: GameOverResult | null;
   assistant: AssistantState;
+  pendingMilestoneEventId: MilestoneEventId | null;
+  seenMilestoneEventIds: MilestoneEventId[];
   debugRandomEventMode?: DebugRandomEventMode;
   debugRandomEventId?: RandomEventId;
+  debugMilestoneEventId?: MilestoneEventId;
   savedAt: string;
 }
