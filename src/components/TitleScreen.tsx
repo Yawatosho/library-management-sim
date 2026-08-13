@@ -154,8 +154,24 @@ export const TitleScreen = ({
       </main>
 
       <footer className="title-key-footer">
-        <span>UNIVERSITY LIBRARY OPERATIONS OFFICE</span>
-        <small>静かな一手が、大学の未来を変える。</small>
+        <span className="title-key-footer__office">UNIVERSITY LIBRARY OPERATIONS OFFICE</span>
+        <div className="title-key-footer__credits">
+          <small>
+            作成：
+            <a href="https://yawatosho.hateblo.jp/" target="_blank" rel="noreferrer">
+              やわらか図書館学
+            </a>
+          </small>
+          <a
+            className="title-key-footer__games-link"
+            href="https://yawatosho.github.io/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span>YAWATOSHO GAMES</span>
+            <span aria-hidden="true">↗</span>
+          </a>
+        </div>
       </footer>
       {saveDataOpen && (
         <SaveDataModal
